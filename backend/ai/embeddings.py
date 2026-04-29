@@ -5,7 +5,7 @@ Swap AI_PROVIDER in .env to change the underlying embedding model.
 
 import logging
 
-from app.ai.providers import get_embedding_provider
+from backend.ai.providers import get_embedding_provider
 
 logger = logging.getLogger(__name__)
 

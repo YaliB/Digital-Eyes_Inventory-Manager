@@ -9,7 +9,7 @@ import logging
 
 from openai import AsyncOpenAI
 
-from app.ai.providers.base import BaseEmbeddingProvider, BaseVisionProvider
+from backend.ai.providers.base import BaseEmbeddingProvider, BaseVisionProvider
 
 logger = logging.getLogger(__name__)
 

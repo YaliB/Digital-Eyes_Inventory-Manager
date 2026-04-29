@@ -26,7 +26,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 
-from app.auth.jwt import decode_token
+from backend.auth.jwt import decode_token
 
 logger = logging.getLogger(__name__)
 

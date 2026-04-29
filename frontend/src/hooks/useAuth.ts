@@ -8,9 +8,9 @@ export const useAuth = () => {
   return {
     ...auth,
     role,
-    isAdmin: role === 'admin',
-    isEmployee: role === 'employee',
-    isViewer: role === 'viewer',
+    isAdmin: role === 'manager',
+    isEmployee: role === 'worker',
+    isViewer: role === 'supplier',
     can: (allowedRoles: UserRole[]) => role !== null && allowedRoles.includes(role),
   };
 };
