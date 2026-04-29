@@ -1,7 +1,4 @@
-"""
-POST /auth/login — returns a JWT token.
-Hackathon POC: plain password comparison, no hashing.
-"""
+"""POST /auth/login — returns a JWT token."""
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -10,6 +7,7 @@ from backend.schemas.auth import LoginRequest, TokenResponse
 
 router = APIRouter(prefix="/auth")
 
+# Demo users for POC — replace with real user lookup against the DB in production
 DEMO_USERS = {
     "manager1":  {"user_id": "manager1",  "role": "manager",  "password": "manager123"},
     "worker1":   {"user_id": "worker1",   "role": "worker",   "password": "worker123"},
@@ -19,14 +17,6 @@ DEMO_USERS = {
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest):
-    """
-    Authenticate a user and return a JWT token.
-
-    Demo credentials:
-      manager1  / manager123
-      worker1   / worker123
-      supplier1 / supplier123
-    """
     user = DEMO_USERS.get(request.username)
     if not user or user["password"] != request.password:
         raise HTTPException(
@@ -44,9 +34,3 @@ async def login(request: LoginRequest):
         role=user["role"],
         user_id=user["user_id"],
     )
-
-
-@router.get("/me")
-async def get_me():
-    """Returns current user info — wire up after auth dependency is added."""
-    return {"message": "not_implemented_yet"}
