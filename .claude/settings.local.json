@@ -5,7 +5,17 @@
       "Bash(awk '{print $9}')",
       "Bash(grep -v \"^$\")",
       "Bash(npm run *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\python.exe --version)",
+      "Bash(C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\pip.exe list *)",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\python.exe\" --version; & \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\pip.exe\" list)",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\pip.exe\" install fastapi \"uvicorn[standard]\" 2>&1)",
+      "PowerShell(Out-File *)",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import fastapi, uvicorn; print\\('fastapi', fastapi.__version__\\); print\\('uvicorn', uvicorn.__version__\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\pip.exe\" install sqlalchemy 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\pip.exe\" install openai \"python-jose[cryptography]\" \"passlib[bcrypt]\" httpx python-multipart 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\python.exe\" -c \"from backend.app.schemas.baseline import BaselineUploadResponse; print\\('OK:', BaselineUploadResponse.model_fields\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\tamer\\\\Digital-Eyes_Inventory-Manager\\\\.venv\\\\Scripts\\\\uvicorn.exe\" --version)"
     ]
   }
 }
