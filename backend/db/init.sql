@@ -45,7 +45,6 @@ INSERT INTO shelves (id, name, location) VALUES
     ('shelf-3', 'Beverages Shelf C', 'Aisle 5')
 ON CONFLICT DO NOTHING;
 
--- Yali's legacy tables: pre-created so SQLAlchemy's create_all skips them
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR UNIQUE,

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -9,6 +10,7 @@ class HistoryScanItem(BaseModel):
     shelf_health_score: int
     gaps_count: int
     created_at: datetime
+    result_json: dict[str, Any] | None = None
 
 
 class HistoryResponse(BaseModel):

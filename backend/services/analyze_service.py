@@ -135,20 +135,23 @@ async def run_analysis(
     created_at = datetime.now(timezone.utc)
 
     try:
+        result_payload = {
+            "category_detected": category_detected,
+            "gaps": [g.model_dump() for g in enriched_gaps],
+            "prioritized_actions": prioritized_actions,
+            "overall_summary": overall_summary,
+        }
+
         await db.execute(
             text("""
                 INSERT INTO scans (
                     id, shelf_id, baseline_id,
                     shelf_health_score, gaps_count,
-                    category_detected, gaps_json,
-                    prioritized_actions_json, overall_summary,
-                    created_at
+                    result_json, created_at
                 ) VALUES (
                     :id, :shelf_id, :baseline_id,
                     :health_score, :gaps_count,
-                    :category, :gaps_json,
-                    :actions_json, :summary,
-                    :created_at
+                    :result_json::jsonb, :created_at
                 )
             """),
             {
@@ -157,10 +160,7 @@ async def run_analysis(
                 "baseline_id": baseline_id,
                 "health_score": health_score,
                 "gaps_count": len(enriched_gaps),
-                "category": category_detected,
-                "gaps_json": json.dumps([g.model_dump() for g in enriched_gaps]),
-                "actions_json": json.dumps(prioritized_actions),
-                "summary": overall_summary,
+                "result_json": json.dumps(result_payload),
                 "created_at": created_at,
             },
         )
