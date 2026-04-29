@@ -1,6 +1,6 @@
 """
 POST /auth/login — returns a JWT token.
-For POC we use hardcoded demo users. Yali can wire up real DB users later.
+Hackathon POC: plain password comparison, no hashing.
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -10,16 +10,11 @@ from backend.schemas.auth import LoginRequest, TokenResponse
 
 router = APIRouter(prefix="/auth")
 
-# ── Demo users for hackathon POC ──────────────────────────────────────────────
-# Passwords are stored in plain text here and compared directly to avoid
-# bcrypt 4.x / passlib import-time hashing incompatibility (ValueError >72 bytes).
-# Yali: replace with real DB lookup + hashed passwords when users table is ready.
-_DEMO_PLAIN: dict[str, dict] = {
-    "worker1":   {"user_id": "worker1",   "role": "worker",   "password": "worker123"},
+DEMO_USERS = {
     "manager1":  {"user_id": "manager1",  "role": "manager",  "password": "manager123"},
+    "worker1":   {"user_id": "worker1",   "role": "worker",   "password": "worker123"},
     "supplier1": {"user_id": "supplier1", "role": "supplier", "password": "supplier123"},
 }
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -28,13 +23,12 @@ async def login(request: LoginRequest):
     Authenticate a user and return a JWT token.
 
     Demo credentials:
-      worker1 / worker123
-      manager1 / manager123
+      manager1  / manager123
+      worker1   / worker123
       supplier1 / supplier123
     """
-    user = _DEMO_PLAIN.get(request.username)
-
-    if not user or request.password != user["password"]:
+    user = DEMO_USERS.get(request.username)
+    if not user or user["password"] != request.password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
