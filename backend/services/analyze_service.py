@@ -330,6 +330,15 @@ def _single_image_to_analyze_response(
     summary: str = single.get("summary", "")
     restocking: list[dict] = single.get("restocking_list", [])
     sections: list[dict] = single.get("sections", [])
+    status: str = single.get("status", "PARTIAL")
+
+    # Normalize score against AI's own status declaration to prevent middle-value drift.
+    # e.g. AI says status=FULL but overall_fill_percentage=70 — that's a contradiction.
+    if status == "FULL":
+        fill = max(fill, 90)
+        restocking = []   # FULL means no restocking needed
+    elif status == "EMPTY":
+        fill = min(fill, 19)
 
     # Convert restocking items → DetectedGap objects (no bounding boxes — single image)
     conf_float = _CONFIDENCE_FLOAT.get(confidence, 0.5)

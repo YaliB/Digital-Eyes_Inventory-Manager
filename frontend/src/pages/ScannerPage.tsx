@@ -437,9 +437,7 @@ export const ScannerPage = () => {
                 No baseline set — AI will use single-image mode. Upload a baseline for richer gap detection.
               </div>
             )}
-            {true && (
-              <>
-                {/* Analysis image upload */}
+            {/* Analysis image upload */}
                 <input
                   ref={analysisCameraRef}
                   type="file"
@@ -493,8 +491,6 @@ export const ScannerPage = () => {
                 >
                   🔍 Analyze Now
                 </Button>
-              </>
-            )}
           </div>
         </Card>
 

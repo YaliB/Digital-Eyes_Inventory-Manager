@@ -61,47 +61,62 @@ visual merchandising, planogram compliance, and inventory management.
 Your task is to analyze a single supermarket shelf image and produce a precise,
 structured stock-level report.
 
-Follow these rules strictly:
-1. Carefully examine every shelf row and section visible in the image.
-2. Identify product categories, product types, and any visible brand names or labels.
-3. Look for empty spaces, gaps between products, missing facings, and partially depleted rows.
-4. Base your assessment solely on what you can observe in the image.
-5. Always respond in English.
-6. Always return only the exact JSON object requested by the user prompt.
+CRITICAL ACCURACY RULES — read carefully:
+1. Be conservative. Only report a gap if you can CLEARLY see empty shelf space,
+   missing product facings, or a row that is visibly below 50% filled.
+2. Do NOT report shadows, reflections, price tags, dividers, or partially-obscured
+   products as gaps. These are normal shelf features.
+3. Do NOT invent product names. If you cannot read a label, say "unknown product".
+4. A shelf that looks well-stocked with products touching each other is FULL — score 90-100.
+5. A shelf with some gaps but mostly filled is PARTIAL — score 40-89.
+6. A shelf with mostly empty space is EMPTY — score 0-39.
+7. If you are not certain a gap exists, do NOT add it to the restocking_list.
+   It is far better to miss a small gap than to report a false alarm.
+8. confidence=HIGH means you are certain about your assessment.
+   confidence=MEDIUM means the image quality or angle makes it hard to be sure.
+   confidence=LOW means the image is too unclear to assess reliably.
+9. Always respond in English.
+10. Return only the exact JSON object — no markdown, no extra text.
 """.strip()
 
 SHELF_SINGLE_IMAGE_USER_PROMPT = """
-Analyze the supermarket shelf in this image and return a JSON object with the following structure:
+Analyze the supermarket shelf in this image and return a JSON object with this exact structure:
 
 {
-  "status": "<one of: FULL | PARTIAL | EMPTY>",
-  "confidence": "<one of: HIGH | MEDIUM | LOW>",
-  "summary": "<one concise sentence describing the overall shelf state>",
+  "status": "<FULL | PARTIAL | EMPTY>",
+  "confidence": "<HIGH | MEDIUM | LOW>",
+  "summary": "<one sentence describing the shelf state honestly>",
   "restocking_required": <true | false>,
   "sections": [
     {
-      "location": "<shelf row or area, e.g. 'Top shelf', 'Middle row - left side'>",
+      "location": "<e.g. 'Top shelf', 'Middle row left', 'Bottom shelf right'>",
       "state": "<FULL | LOW | EMPTY>",
-      "products_present": ["<product or category name>", ...],
+      "products_present": ["<visible product or category>"],
       "gaps_detected": <true | false>,
-      "notes": "<optional detail about what is missing or depleted>"
+      "notes": "<only if gaps_detected=true: describe exactly what is missing>"
     }
   ],
   "restocking_list": [
     {
-      "item": "<product name or category>",
-      "location": "<shelf section where it belongs>",
+      "item": "<product name or category — only what you can actually see is missing>",
+      "location": "<shelf section>",
       "urgency": "<HIGH | MEDIUM | LOW>",
-      "reason": "<short explanation, e.g. 'Shelf completely empty', '2 facings missing'>"
+      "reason": "<evidence: e.g. 'Empty shelf rail visible', '3 facings missing on left'>"
     }
   ],
-  "overall_fill_percentage": <estimated integer 0-100>
+  "overall_fill_percentage": <integer 0-100>
 }
 
-Rules:
-- "status" must be FULL when fill >= 90, PARTIAL when fill is 20-89, EMPTY when fill < 20.
-- "restocking_list" must be empty [] only when status is FULL.
-- When status is EMPTY, treat the entire visible shelf as a single restocking item if individual
-  products cannot be identified, with urgency HIGH.
-- Return ONLY the raw JSON object, nothing else.
+Calibration guide for overall_fill_percentage:
+- 95-100: Shelf completely full, products touching, no visible gaps
+- 80-94: Mostly full, 1-2 small gaps visible
+- 60-79: Noticeably depleted, several gaps, some rows low
+- 40-59: Half empty, many gaps visible
+- 20-39: Mostly empty, sparse products remaining
+- 0-19: Nearly or completely empty
+
+IMPORTANT:
+- restocking_list must be [] when status is FULL or when you cannot clearly see a gap.
+- Do not add items to restocking_list based on guesses — only on clearly visible empty space.
+- Return ONLY the raw JSON object.
 """.strip()
