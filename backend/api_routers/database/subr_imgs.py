@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 
-from db.db_core import ImageNotFoundError, image_store
+from backend.db.db_img_savers import ImageNotFoundError, image_store
 
 router = APIRouter()
 
