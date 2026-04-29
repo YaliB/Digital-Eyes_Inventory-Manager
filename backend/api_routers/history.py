@@ -48,6 +48,7 @@ async def get_history(
                 shelf_id,
                 shelf_health_score,
                 gaps_count,
+                result_json,
                 created_at
             FROM scans
             {filters}
@@ -71,6 +72,7 @@ async def get_history(
                 "shelf_id": row.shelf_id,
                 "shelf_health_score": row.shelf_health_score,
                 "gaps_count": row.gaps_count,
+                "result_json": row.result_json,
                 "created_at": row.created_at.isoformat(),
             }
             for row in rows

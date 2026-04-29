@@ -1,40 +1,107 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, AlertCircle, ShieldOff } from 'lucide-react';
+import { Eye, AlertCircle, ShieldOff, RefreshCw } from 'lucide-react';
 import { Layout } from '@/components/Layout';
+import { Button } from '@/components/Button';
 import { HealthScore, AlertItem } from '@/components/DashboardComponents';
 import { LoadingState } from '@/components/LoadingState';
-import { OutOfStockAlert, AlertPriority } from '@/types';
+import * as api from '@/services/api';
 
-const MOCK_ALERTS: OutOfStockAlert[] = [
-  {
-    id: '1', productId: 'P001', productName: 'Coca-Cola 2L', sku: 'COL-2L-001',
-    aisle: 'A1', shelf: 'Top', priority: AlertPriority.CRITICAL,
-    createdAt: new Date(Date.now() - 30 * 60 * 1000), detectedBy: 'AI Analysis',
-  },
-  {
-    id: '2', productId: 'P002', productName: 'Sprite 1.5L', sku: 'SPR-1.5L-002',
-    aisle: 'A1', shelf: 'Top', priority: AlertPriority.HIGH,
-    createdAt: new Date(Date.now() - 45 * 60 * 1000), detectedBy: 'AI Analysis',
-  },
-  {
-    id: '3', productId: 'P003', productName: 'Orange Juice 1L', sku: 'OJ-1L-003',
-    aisle: 'B2', shelf: 'Middle', priority: AlertPriority.MEDIUM,
-    createdAt: new Date(Date.now() - 60 * 60 * 1000), detectedBy: 'Manual Report',
-  },
-];
+interface GapAlert {
+  id: string;
+  productName: string;
+  sku: string;
+  aisle: string;
+  shelf: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+}
+
+const SHELF_META: Record<string, { aisle: string; shelf: string }> = {
+  'shelf-1': { aisle: 'Aisle 3', shelf: 'Snacks' },
+  'shelf-2': { aisle: 'Aisle 1', shelf: 'Dairy' },
+  'shelf-3': { aisle: 'Aisle 5', shelf: 'Beverages' },
+};
+
+function gapToPriority(severity: string, confidence: number): GapAlert['priority'] {
+  if (severity === 'fully_out') return 'critical';
+  if (confidence >= 0.75) return 'high';
+  return 'medium';
+}
+
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+}
 
 export const ViewerPage = () => {
-  const [alerts, setAlerts] = useState<OutOfStockAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
+  const [healthScore, setHealthScore] = useState(0);
+  const [scansToday, setScansToday] = useState(0);
+  const [alerts, setAlerts] = useState<GapAlert[]>([]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setAlerts(MOCK_ALERTS);
+  const loadData = async () => {
+    setIsLoading(true);
+    setFetchError('');
+    try {
+      const data = await api.getHistory({ limit: 50 }) as any;
+      const scans: any[] = data.scans ?? [];
+
+      if (scans.length === 0) {
+        setHealthScore(0);
+        setScansToday(0);
+        setAlerts([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const scores = scans
+        .map((s: any) => s.shelf_health_score)
+        .filter((s: any) => s !== null && s !== undefined);
+      const avgScore = scores.length
+        ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length)
+        : 0;
+      setHealthScore(avgScore);
+      setScansToday(scans.filter((s: any) => isToday(s.created_at)).length);
+
+      const seen = new Set<string>();
+      const gapAlerts: GapAlert[] = [];
+
+      for (const scan of scans) {
+        const meta = SHELF_META[scan.shelf_id] ?? { aisle: scan.shelf_id, shelf: '—' };
+        const gaps: any[] = scan.result_json?.gaps ?? [];
+
+        for (const gap of gaps) {
+          const product = gap.estimated_missing_product ?? 'Unknown product';
+          if (seen.has(product)) continue;
+          seen.add(product);
+
+          gapAlerts.push({
+            id: `${scan.id}-${gap.gap_id}`,
+            productName: product,
+            sku: product.toLowerCase().replace(/\s+/g, '-').slice(0, 12),
+            aisle: meta.aisle,
+            shelf: `${meta.shelf} — ${gap.location_description ?? ''}`.trim(),
+            priority: gapToPriority(gap.severity, gap.confidence ?? 0),
+          });
+        }
+      }
+
+      const order = { critical: 0, high: 1, medium: 2, low: 3 };
+      gapAlerts.sort((a, b) => order[a.priority] - order[b.priority]);
+      setAlerts(gapAlerts);
+
+    } catch (err: any) {
+      setFetchError(err.message || 'Failed to load shelf status');
+    } finally {
       setIsLoading(false);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   if (isLoading) {
     return (
@@ -63,13 +130,19 @@ export const ViewerPage = () => {
           </p>
         </motion.div>
 
+        {fetchError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+            {fetchError}
+          </div>
+        )}
+
         {/* Health Score */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <HealthScore score={72} />
+          <HealthScore score={healthScore} />
         </motion.div>
 
         {/* Quick Stats */}
@@ -80,7 +153,7 @@ export const ViewerPage = () => {
             transition={{ delay: 0.2 }}
             className="bg-primary-50 rounded-lg p-4 border border-primary-200"
           >
-            <p className="text-2xl font-bold text-primary-600">24</p>
+            <p className="text-2xl font-bold text-primary-600">{scansToday}</p>
             <p className="text-xs text-primary-700 font-medium mt-1">Scans Today</p>
           </motion.div>
           <motion.div
@@ -89,7 +162,9 @@ export const ViewerPage = () => {
             transition={{ delay: 0.3 }}
             className="bg-alert-50 rounded-lg p-4 border border-alert-200"
           >
-            <p className="text-2xl font-bold text-alert-600">{alerts.length}</p>
+            <p className="text-2xl font-bold text-alert-600">
+              {alerts.filter(a => a.priority === 'critical' || a.priority === 'high').length}
+            </p>
             <p className="text-xs text-alert-700 font-medium mt-1">Out of Stock</p>
           </motion.div>
         </div>
@@ -106,25 +181,37 @@ export const ViewerPage = () => {
             </span>
           </div>
 
-          <div className="space-y-3">
-            {alerts.map((alert, idx) => (
-              <motion.div
-                key={alert.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 + idx * 0.1 }}
-              >
-                <AlertItem
-                  priority={alert.priority}
-                  productName={alert.productName}
-                  sku={alert.sku}
-                  aisle={alert.aisle}
-                  shelf={alert.shelf}
-                />
-              </motion.div>
-            ))}
-          </div>
+          {alerts.length === 0 ? (
+            <p className="text-center py-6 text-neutral-500 text-sm">
+              No gaps detected yet. Scans will appear here automatically.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {alerts.map((alert, idx) => (
+                <motion.div
+                  key={alert.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + idx * 0.08 }}
+                >
+                  <AlertItem
+                    priority={alert.priority}
+                    productName={alert.productName}
+                    sku={alert.sku}
+                    aisle={alert.aisle}
+                    shelf={alert.shelf}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Refresh */}
+        <Button variant="outline" fullWidth onClick={loadData}>
+          <RefreshCw className="w-4 h-4" />
+          Refresh Status
+        </Button>
 
         {/* Upgrade notice */}
         <motion.div
