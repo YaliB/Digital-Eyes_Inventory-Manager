@@ -18,6 +18,12 @@ def _encode_image(image_bytes: bytes) -> str:
     return base64.b64encode(image_bytes).decode("utf-8")
 
 
+def _normalize_media_type(media_type: str | None) -> str:
+    if media_type in {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}:
+        return "image/jpeg" if media_type == "image/jpg" else media_type
+    return "image/jpeg"
+
+
 class OpenAIVisionProvider(BaseVisionProvider):
     """GPT-4o vision provider."""
 
@@ -80,6 +86,51 @@ class OpenAIVisionProvider(BaseVisionProvider):
             return json.loads(raw)
         except json.JSONDecodeError as e:
             logger.error("OpenAI returned invalid JSON: %s", raw[:200])
+            raise ValueError(f"OpenAI returned invalid JSON: {e}") from e
+
+    async def analyze_single_shelf(
+        self,
+        image_bytes: bytes,
+        system_prompt: str,
+        user_prompt: str,
+        media_type: str = "image/jpeg",
+    ) -> dict:
+        logger.info("OpenAI GPT-4o: analyzing single shelf image...")
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{_normalize_media_type(media_type)};base64,{_encode_image(image_bytes)}",
+                            "detail": "high",
+                        },
+                    },
+                    {"type": "text", "text": user_prompt},
+                ],
+            }
+        ]
+
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                *messages,
+            ],
+            max_tokens=2000,
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+
+        raw = response.choices[0].message.content
+        logger.info("OpenAI single-image response received (%d chars)", len(raw))
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            logger.error("OpenAI returned invalid single-image JSON: %s", raw[:200])
             raise ValueError(f"OpenAI returned invalid JSON: {e}") from e
 
 

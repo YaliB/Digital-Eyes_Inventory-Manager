@@ -1,68 +1,19 @@
 """
-Supermarket Shelf Analyzer
-Analyzes shelf images using OpenAI GPT-4 Vision to detect stock levels.
-API key is read only from a local .env file.
+CLI utility for single-image shelf analysis.
+Uses the project's shared AI provider and prompts.
 """
 
-import base64
+import asyncio
+import json
+import os
 import sys
 from pathlib import Path
 
-from openai import OpenAI
+from backend.ai.vision import analyze_single_shelf
 
 
-SYSTEM_PROMPT = """You are an expert retail shelf-auditing AI with years of experience in
-visual merchandising, planogram compliance, and inventory management.
-
-Your task is to analyze supermarket shelf images and produce a precise, structured stock-level report.
-
-Follow these rules strictly:
-1. Carefully examine every shelf row/section visible in the image.
-2. Identify product categories, product types, and any visible brand names or labels.
-3. Look for empty spaces, gaps between products, missing facings, and partially depleted rows.
-4. Base your assessment solely on what you can observe in the image.
-5. Always respond in English.
-6. Always use the exact JSON structure specified by the user — no extra keys, no markdown fences."""
-
-
-ANALYSIS_PROMPT = """Analyze the supermarket shelf in this image and return a JSON object with the following structure:
-
-{
-  "status": "<one of: FULL | PARTIAL | EMPTY>",
-  "confidence": "<one of: HIGH | MEDIUM | LOW>",
-  "summary": "<one concise sentence describing the overall shelf state>",
-  "restocking_required": <true | false>,
-  "sections": [
-    {
-      "location": "<shelf row or area, e.g. 'Top shelf', 'Middle row – left side'>",
-      "state": "<FULL | LOW | EMPTY>",
-      "products_present": ["<product or category name>", ...],
-      "gaps_detected": <true | false>,
-      "notes": "<optional detail about what is missing or depleted>"
-    }
-  ],
-  "restocking_list": [
-    {
-      "item": "<product name or category>",
-      "location": "<shelf section where it belongs>",
-      "urgency": "<HIGH | MEDIUM | LOW>",
-      "reason": "<short explanation, e.g. 'Shelf completely empty', '2 facings missing'>"
-    }
-  ],
-  "overall_fill_percentage": <estimated integer 0-100>
-}
-
-Rules:
-- "status" must be FULL when fill ≥ 90 %, PARTIAL when 20 %–89 %, EMPTY when < 20 %.
-- "restocking_list" must be empty [] only when status is FULL.
-- When status is EMPTY, treat the entire visible shelf as a single restocking item if individual
-  products cannot be identified, with urgency HIGH.
-- Do NOT wrap the JSON in markdown code fences.
-- Return ONLY the raw JSON object, nothing else."""
-
-
-def encode_image(image_path: str) -> tuple[str, str]:
-    """Return (base64_data, media_type) for the given image file."""
+def detect_media_type(image_path: str) -> str:
+    """Infer the image media type from the file suffix."""
     suffix = Path(image_path).suffix.lower()
     media_map = {
         ".jpg": "image/jpeg",
@@ -71,14 +22,11 @@ def encode_image(image_path: str) -> tuple[str, str]:
         ".webp": "image/webp",
         ".gif": "image/gif",
     }
-    media_type = media_map.get(suffix, "image/jpeg")
-    with open(image_path, "rb") as f:
-        data = base64.standard_b64encode(f.read()).decode("utf-8")
-    return data, media_type
+    return media_map.get(suffix, "image/jpeg")
 
 
 def load_api_key_from_dotenv() -> str:
-    """Load OPENAI_API_KEY strictly from .env file in the project directory."""
+    """Load OPENAI_API_KEY strictly from a local .env file next to this script."""
     dotenv_path = Path(__file__).resolve().parent / ".env"
     if not dotenv_path.is_file():
         raise EnvironmentError(
@@ -86,8 +34,8 @@ def load_api_key_from_dotenv() -> str:
             "Create it and add OPENAI_API_KEY=<your_key>."
         )
 
-    with open(dotenv_path, "r", encoding="utf-8") as f:
-        for raw_line in f:
+    with open(dotenv_path, "r", encoding="utf-8") as file:
+        for raw_line in file:
             line = raw_line.strip()
             if not line or line.startswith("#"):
                 continue
@@ -109,66 +57,32 @@ def load_api_key_from_dotenv() -> str:
     )
 
 
-def analyze_shelf(image_path: str) -> dict:
-    """
-    Send the shelf image to OpenAI and return the parsed analysis dict.
-    Raises ValueError if the API returns unexpected output.
-    """
-    api_key = load_api_key_from_dotenv()
+async def run_cli_analysis(image_path: str) -> dict:
+    """Load the image and analyze it through the shared backend AI flow."""
+    if not os.getenv("OPENAI_API_KEY"):
+        os.environ["OPENAI_API_KEY"] = load_api_key_from_dotenv()
 
-    client = OpenAI(api_key=api_key)
+    with open(image_path, "rb") as file:
+        image_bytes = file.read()
 
-    image_data, media_type = encode_image(image_path)
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{media_type};base64,{image_data}",
-                            "detail": "high",
-                        },
-                    },
-                    {"type": "text", "text": ANALYSIS_PROMPT},
-                ],
-            },
-        ],
-        max_tokens=1500,
-        temperature=0,  # deterministic output for auditing
+    return await analyze_single_shelf(
+        image_bytes=image_bytes,
+        media_type=detect_media_type(image_path),
     )
-
-    raw = response.choices[0].message.content.strip()
-
-    import json
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"Model returned non-JSON output.\n---\n{raw}\n---"
-        ) from exc
-
-    return result
 
 
 def print_report(result: dict, image_path: str) -> None:
     """Pretty-print the analysis result to stdout."""
-    import json
-
     status = result.get("status", "UNKNOWN")
     fill = result.get("overall_fill_percentage", "?")
     confidence = result.get("confidence", "?")
     summary = result.get("summary", "")
     restocking_list = result.get("restocking_list", [])
 
-    status_icon = {"FULL": "✅", "PARTIAL": "⚠️", "EMPTY": "🚨"}.get(status, "❓")
+    status_icon = {"FULL": "OK", "PARTIAL": "WARN", "EMPTY": "ALERT"}.get(status, "?")
 
     print("=" * 60)
-    print(f"  SHELF ANALYSIS REPORT")
+    print("  SHELF ANALYSIS REPORT")
     print(f"  Image : {image_path}")
     print("=" * 60)
     print(f"  Status            : {status_icon}  {status}")
@@ -181,26 +95,24 @@ def print_report(result: dict, image_path: str) -> None:
     sections = result.get("sections", [])
     if sections:
         print("  SECTIONS:")
-        for sec in sections:
-            gap = "⚠️ gaps" if sec.get("gaps_detected") else "ok"
-            print(f"    [{sec.get('state','?'):5}] {sec.get('location','')} — {gap}")
-            if sec.get("notes"):
-                print(f"           Note: {sec['notes']}")
-            products = sec.get("products_present", [])
+        for section in sections:
+            gap = "gaps" if section.get("gaps_detected") else "ok"
+            print(f"    [{section.get('state', '?'):5}] {section.get('location', '')} - {gap}")
+            if section.get("notes"):
+                print(f"           Note: {section['notes']}")
+            products = section.get("products_present", [])
             if products:
                 print(f"           Products: {', '.join(products)}")
         print()
 
     if restocking_list:
         print("  RESTOCKING LIST:")
-        for idx, item in enumerate(restocking_list, 1):
+        for index, item in enumerate(restocking_list, 1):
             urgency = item.get("urgency", "?")
-            urgency_icon = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}.get(urgency, "⚪")
             print(
-                f"    {idx:2}. {urgency_icon} [{urgency:6}] {item.get('item','')} "
-                f"@ {item.get('location','')}"
+                f"    {index:2}. [{urgency:6}] {item.get('item', '')} @ {item.get('location', '')}"
             )
-            print(f"          Reason: {item.get('reason','')}")
+            print(f"          Reason: {item.get('reason', '')}")
         print()
     else:
         print("  No restocking required. Shelf is well stocked.\n")
@@ -224,7 +136,7 @@ def main() -> None:
 
     print(f"Analyzing shelf image: {image_path} ...")
     try:
-        result = analyze_shelf(image_path)
+        result = asyncio.run(run_cli_analysis(image_path))
         print_report(result, image_path)
     except EnvironmentError as exc:
         print(f"Configuration error: {exc}")

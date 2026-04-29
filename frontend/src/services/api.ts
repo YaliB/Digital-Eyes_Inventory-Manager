@@ -60,6 +60,24 @@ export async function analyzeShelf(shelfId: string, image: File): Promise<unknow
   return res.json();
 }
 
+export interface BaselineStatus {
+  exists: boolean;
+  captured_at: string | null;
+  baseline_id: string | null;
+}
+
+export async function checkBaselineExists(shelfId: string): Promise<BaselineStatus> {
+  const res = await fetch(
+    `${API_URL}/baseline/status?shelf_id=${encodeURIComponent(shelfId)}`,
+    { headers: authHeaders() },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to check baseline status');
+  }
+  return res.json();
+}
+
 export async function getHistory(params?: {
   shelf_id?: string;
   limit?: number;

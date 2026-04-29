@@ -11,13 +11,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import CurrentUser, require_roles
-from backend.api_routers.baseline import get_db
+from backend.db.db_core import get_db
+from backend.schemas.history import HistoryResponse, HistoryScanItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/history")
+@router.get("/history", response_model=HistoryResponse)
 async def get_history(
     shelf_id: str | None = Query(default=None),
     limit: int = Query(default=20, le=100),
@@ -48,6 +49,7 @@ async def get_history(
                 shelf_id,
                 shelf_health_score,
                 gaps_count,
+                result_json,
                 created_at
             FROM scans
             {filters}
@@ -64,20 +66,20 @@ async def get_history(
     )
     total = count_result.scalar()
 
-    return {
-        "scans": [
-            {
-                "id": str(row.id),
-                "shelf_id": row.shelf_id,
-                "shelf_health_score": row.shelf_health_score,
-                "gaps_count": row.gaps_count,
-                "created_at": row.created_at.isoformat(),
-            }
+    return HistoryResponse(
+        scans=[
+            HistoryScanItem(
+                id=str(row.id),
+                shelf_id=row.shelf_id,
+                shelf_health_score=row.shelf_health_score,
+                gaps_count=row.gaps_count,
+                created_at=row.created_at,
+            )
             for row in rows
         ],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "requested_by": user.user_id,
-        "role": user.role,
-    }
+        total=total,
+        page=page,
+        limit=limit,
+        requested_by=user.user_id,
+        role=user.role,
+    )

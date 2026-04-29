@@ -1,16 +1,14 @@
-"""
-JWT token creation and verification.
-Simple, stateless auth — no auth server needed for hackathon.
-"""
+"""JWT token creation and verification."""
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
 
 logger = logging.getLogger(__name__)
 
-SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION_ENV"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "CHANGE_THIS_IN_PRODUCTION_ENV")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 hours — full shift
 
