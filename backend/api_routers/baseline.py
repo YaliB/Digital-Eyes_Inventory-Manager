@@ -8,17 +8,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser, require_roles
-from app.schemas.baseline import BaselineUploadResponse
+from backend.auth.dependencies import CurrentUser, require_roles
+from backend.db.db_core import get_db
+from backend.schemas.baseline import BaselineUploadResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
-
-
-async def get_db():
-    """DB session dependency — Yali implements the real version in app/db/."""
-    raise NotImplementedError("Yali: wire up DB session here")
 
 
 @router.post("/baseline", response_model=BaselineUploadResponse)

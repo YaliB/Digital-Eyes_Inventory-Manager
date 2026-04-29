@@ -12,19 +12,19 @@ Supported values:
 
 import os
 
-from app.ai.providers.base import BaseEmbeddingProvider, BaseVisionProvider
+from backend.ai.providers.base import BaseEmbeddingProvider, BaseVisionProvider
 
 
 def get_vision_provider() -> BaseVisionProvider:
     provider = os.getenv("AI_PROVIDER", "openai").lower()
 
     if provider == "openai":
-        from app.ai.providers.openai_provider import OpenAIVisionProvider
+        from backend.ai.providers.openai_provider import OpenAIVisionProvider
 
         return OpenAIVisionProvider(model=os.getenv("OPENAI_VISION_MODEL", "gpt-4o"))
 
     if provider == "ollama":
-        from app.ai.providers.ollama_provider import OllamaVisionProvider
+        from backend.ai.providers.ollama_provider import OllamaVisionProvider
 
         return OllamaVisionProvider(model=os.getenv("OLLAMA_VISION_MODEL", "llava"))
 
@@ -35,14 +35,14 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
     provider = os.getenv("AI_PROVIDER", "openai").lower()
 
     if provider == "openai":
-        from app.ai.providers.openai_provider import OpenAIEmbeddingProvider
+        from backend.ai.providers.openai_provider import OpenAIEmbeddingProvider
 
         return OpenAIEmbeddingProvider(
             model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
         )
 
     if provider == "ollama":
-        from app.ai.providers.ollama_provider import OllamaEmbeddingProvider
+        from backend.ai.providers.ollama_provider import OllamaEmbeddingProvider
 
         return OllamaEmbeddingProvider(
             model=os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")

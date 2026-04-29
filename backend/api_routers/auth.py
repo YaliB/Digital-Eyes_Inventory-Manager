@@ -5,8 +5,8 @@ For POC we use hardcoded demo users. Yali can wire up real DB users later.
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.auth.jwt import create_access_token, verify_password, hash_password
-from app.schemas.auth import LoginRequest, TokenResponse
+from backend.auth.jwt import create_access_token, verify_password, hash_password
+from backend.schemas.auth import LoginRequest, TokenResponse
 
 router = APIRouter(prefix="/auth")
 

@@ -5,11 +5,11 @@ Swap AI_PROVIDER in .env to change the underlying model.
 
 import logging
 
-from app.ai.prompts import (
+from backend.ai.prompts import (
     SHELF_COMPARISON_SYSTEM_PROMPT,
     SHELF_COMPARISON_USER_PROMPT,
 )
-from app.ai.providers import get_vision_provider
+from backend.ai.providers import get_vision_provider
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser, require_roles
-from app.routes.baseline import get_db
+from backend.auth.dependencies import CurrentUser, require_roles
+from backend.api_routers.baseline import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
