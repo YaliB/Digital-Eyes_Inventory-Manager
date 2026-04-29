@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.db_core import get_db
 from backend.db.db_models import Image
-from backend.schemas.database import DeleteResponse, ImageResponse
+from backend.schemas.common import DeleteResponse
+from backend.schemas.database_images import ImageResponse
 
 router = APIRouter()
 
