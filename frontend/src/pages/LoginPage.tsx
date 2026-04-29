@@ -36,8 +36,8 @@ export const LoginPage = () => {
       const user = await login(identifier, password);
       if (rememberMe) localStorage.setItem('rememberMe', 'true');
       navigate(
-        user.role === 'admin' ? '/dashboard' :
-        user.role === 'employee' ? '/scanner' :
+        user.role === 'manager' ? '/dashboard' :
+        user.role === 'worker' ? '/scanner' :
         '/shelf-status'
       );
     } catch {
@@ -251,9 +251,9 @@ export const LoginPage = () => {
               Demo accounts
             </p>
             <div className="space-y-1 text-xs text-neutral-600">
-              <p><span className="font-semibold">Admin:</span> admin@store.com / any password</p>
-              <p><span className="font-semibold">Employee:</span> user@store.com / any password</p>
-              <p><span className="font-semibold">Viewer:</span> any other email / any password</p>
+              <p><span className="font-semibold">Manager:</span> manager1 / manager123</p>
+              <p><span className="font-semibold">Worker:</span> worker1 / worker123</p>
+              <p><span className="font-semibold">Supplier:</span> supplier1 / supplier123</p>
             </div>
           </motion.div>
         </motion.div>

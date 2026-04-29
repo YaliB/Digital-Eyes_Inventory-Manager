@@ -15,8 +15,8 @@ const AppRoutes = () => {
   const location = useLocation();
 
   const defaultPath =
-    role === 'admin'    ? '/dashboard' :
-    role === 'employee' ? '/scanner' :
+    role === 'manager' ? '/dashboard' :
+    role === 'worker'  ? '/scanner' :
     '/shelf-status';
 
   if (!isAuthenticated) {
@@ -34,10 +34,10 @@ const AppRoutes = () => {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/dashboard"    element={<ProtectedRoute element={<ManagerDashboard />} allowedRoles={['admin']} />} />
-        <Route path="/scanner"      element={<ProtectedRoute element={<ScannerPage />}      allowedRoles={['admin', 'employee']} />} />
-        <Route path="/tasks"        element={<ProtectedRoute element={<ScannerDashboard />} allowedRoles={['admin', 'employee']} />} />
-        <Route path="/shelf-status" element={<ProtectedRoute element={<ViewerPage />}       allowedRoles={['admin', 'employee', 'viewer']} />} />
+        <Route path="/dashboard"    element={<ProtectedRoute element={<ManagerDashboard />} allowedRoles={['manager']} />} />
+        <Route path="/scanner"      element={<ProtectedRoute element={<ScannerPage />}      allowedRoles={['manager', 'worker']} />} />
+        <Route path="/tasks"        element={<ProtectedRoute element={<ScannerDashboard />} allowedRoles={['manager', 'worker']} />} />
+        <Route path="/shelf-status" element={<ProtectedRoute element={<ViewerPage />}       allowedRoles={['manager', 'worker', 'supplier']} />} />
         <Route path="*"             element={<Navigate to={defaultPath} replace />} />
       </Routes>
     </AnimatePresence>

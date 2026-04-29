@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { User, UserRole } from '@/types';
+import { login as apiLogin } from '@/services/api';
 
 interface AuthContextValue {
   user: User | null;
@@ -12,16 +13,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const toEmail = (identifier: string): string =>
-  identifier.includes('@') ? identifier.trim() : `${identifier.trim()}@store.com`;
-
-const resolveRole = (email: string): UserRole => {
-  const normalized = email.toLowerCase().trim();
-  if (normalized === 'admin@store.com') return 'admin';
-  if (normalized === 'user@store.com') return 'employee';
-  return 'viewer';
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     try {
@@ -33,17 +24,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const login = useCallback(async (identifier: string, _password: string): Promise<User> => {
+  const login = useCallback(async (identifier: string, password: string): Promise<User> => {
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      const email = toEmail(identifier);
-      const role = resolveRole(email);
+      const data = await apiLogin(identifier, password);
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('role', data.role);
       const loggedInUser: User = {
-        id: Date.now().toString(),
-        name: email.split('@')[0],
-        email,
-        role,
+        id: data.user_id,
+        name: data.user_id,
+        email: `${data.user_id}@store.com`,
+        role: data.role as UserRole,
         storeId: 'store-1',
       };
       localStorage.setItem('user', JSON.stringify(loggedInUser));
@@ -68,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         name: fullName.trim(),
         username: username.trim(),
         email,
-        role: 'viewer',
+        role: 'supplier',
         storeId: 'store-1',
       };
       localStorage.setItem('user', JSON.stringify(newUser));
@@ -81,6 +72,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
     setUser(null);
   }, []);
 
