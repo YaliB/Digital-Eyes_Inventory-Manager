@@ -1,7 +1,6 @@
 from fastapi import FastAPI
-# from fastapi.routing import APIRouter
 
-from api_routers.database import database_route
+from backend.api_routers.database import database_route
 
 app = FastAPI(
     title="Digital-Eyes_Inventory-Manager",
