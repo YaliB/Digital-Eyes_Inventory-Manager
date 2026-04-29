@@ -20,12 +20,12 @@ async def find_substitutes(
     Return substitute products for a gap using pgvector cosine similarity.
 
     Strategy:
-      1. Try a pgvector similarity search on product embeddings (requires the
-         products table to have an `embedding` vector column).
-      2. Fall back to a plain category-match query if pgvector is unavailable
-         or the embedding column doesn't exist yet.
+      1. Try a pgvector similarity search on product embeddings.
+      2. Fall back to a plain category-match query.
+      3. Return [] on any DB error — never let this crash the analysis.
 
-    Returns up to `limit` SubstituteProduct objects, empty list on any error.
+    Note: the `products` table uses `sku` as its primary key.
+    The `inventory` table references `products_legacy`, not `products`.
     """
     # ── pgvector path ─────────────────────────────────────────────────────────
     if missing_product_name:
@@ -40,13 +40,12 @@ async def find_substitutes(
             result = await db.execute(
                 text("""
                     SELECT
-                        p.id::text        AS sku,
-                        p.name            AS name,
+                        p.sku                           AS sku,
+                        p.name                          AS name,
                         COALESCE(p.category, :category) AS category,
-                        COALESCE(i.quantity, 0)          AS warehouse_qty,
+                        COALESCE(p.warehouse_qty, 0)    AS warehouse_qty,
                         1 - (p.embedding <=> :vec::vector) AS similarity_score
                     FROM products p
-                    LEFT JOIN inventory i ON i.product_id = p.id
                     WHERE p.embedding IS NOT NULL
                     ORDER BY p.embedding <=> :vec::vector
                     LIMIT :limit
@@ -70,18 +69,18 @@ async def find_substitutes(
                 "pgvector substitutes unavailable (%s), falling back to category match",
                 exc,
             )
+            await db.rollback()
 
     # ── category-match fallback ───────────────────────────────────────────────
     try:
         result = await db.execute(
             text("""
                 SELECT
-                    p.id::text        AS sku,
-                    p.name            AS name,
+                    p.sku                           AS sku,
+                    p.name                          AS name,
                     COALESCE(p.category, :category) AS category,
-                    COALESCE(i.quantity, 0)          AS warehouse_qty
+                    COALESCE(p.warehouse_qty, 0)    AS warehouse_qty
                 FROM products p
-                LEFT JOIN inventory i ON i.product_id = p.id
                 WHERE LOWER(COALESCE(p.category, '')) = LOWER(:category)
                 LIMIT :limit
             """),
@@ -100,4 +99,5 @@ async def find_substitutes(
         ]
     except Exception as exc:
         logger.warning("Category-match substitute search failed: %s", exc)
+        await db.rollback()
         return []

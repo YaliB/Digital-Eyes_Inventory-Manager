@@ -2,7 +2,7 @@ services:
 
   # ── PostgreSQL Database ───────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: shelfguard
@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: shelfguard
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:

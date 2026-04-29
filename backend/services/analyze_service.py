@@ -76,33 +76,45 @@ async def run_analysis(
     enriched_gaps: list[DetectedGap] = []
     for gap_dict in raw_gaps:
         missing_name: str | None = gap_dict.get("estimated_missing_product")
-        substitutes = await find_substitutes(
-            missing_product_name=missing_name,
-            category=category_detected,
-            db=db,
-        )
+        try:
+            substitutes = await find_substitutes(
+                missing_product_name=missing_name,
+                category=category_detected,
+                db=db,
+            )
+        except Exception as exc:
+            logger.warning("find_substitutes raised unexpectedly: %s", exc)
+            await db.rollback()
+            substitutes = []
 
-        # Try to resolve missing product info from inventory
+        # Try to resolve missing product info — optional, never crashes analysis
         missing_product_info: dict | None = None
         if missing_name:
-            prod_result = await db.execute(
-                text("""
-                    SELECT p.id, p.name, p.category, COALESCE(i.quantity, 0) AS qty
-                    FROM products p
-                    LEFT JOIN inventory i ON i.product_id = p.id
-                    WHERE LOWER(p.name) LIKE LOWER(:name)
-                    LIMIT 1
-                """),
-                {"name": f"%{missing_name}%"},
-            )
-            prod_row = prod_result.fetchone()
-            if prod_row:
-                missing_product_info = {
-                    "id": prod_row.id,
-                    "name": prod_row.name,
-                    "category": prod_row.category,
-                    "warehouse_qty": prod_row.qty,
-                }
+            try:
+                prod_result = await db.execute(
+                    text("""
+                        SELECT p.sku, p.name, p.category,
+                               COALESCE(p.warehouse_qty, 0) AS qty
+                        FROM products p
+                        WHERE LOWER(p.name) LIKE LOWER(:name)
+                        LIMIT 1
+                    """),
+                    {"name": f"%{missing_name}%"},
+                )
+                prod_row = prod_result.fetchone()
+                if prod_row:
+                    missing_product_info = {
+                        "sku": prod_row.sku,
+                        "name": prod_row.name,
+                        "category": prod_row.category,
+                        "warehouse_qty": prod_row.qty,
+                    }
+            except Exception as exc:
+                logger.warning(
+                    "Product lookup failed for '%s', continuing without it: %s",
+                    missing_name, exc,
+                )
+                await db.rollback()
 
         enriched_gaps.append(
             DetectedGap(
