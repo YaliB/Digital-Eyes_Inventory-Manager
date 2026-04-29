@@ -5,25 +5,9 @@ import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { HealthScore } from '@/components/DashboardComponents';
 import { LoadingState } from '@/components/LoadingState';
+import { RecentScansWidget } from '@/components/RecentScansWidget';
 import * as api from '@/services/api';
 
-function timeAgo(isoStr: string): string {
-  const diffMs = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const d = new Date(isoStr);
-  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }) + ' ' +
-    d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-function scoreBadgeCls(score: number): string {
-  if (score >= 85) return 'bg-green-100 text-green-800';
-  if (score >= 60) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-red-100 text-red-800';
-}
 
 function isToday(isoStr: string): boolean {
   const d = new Date(isoStr);
@@ -40,7 +24,6 @@ export const ViewerPage = () => {
   const [scansToday, setScansToday] = useState(0);
   const [criticalCount, setCriticalCount] = useState(0);
   const [rawScans, setRawScans] = useState<any[]>([]);
-  const [expandedScanId, setExpandedScanId] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -159,73 +142,7 @@ export const ViewerPage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <h2 className="font-semibold text-neutral-900 mb-3">Recent Scans</h2>
-            <div className="space-y-2">
-              {rawScans.slice(0, 10).map((scan: any) => (
-                <div key={scan.id}>
-                  <button
-                    onClick={() => setExpandedScanId(expandedScanId === scan.id ? null : scan.id)}
-                    className="w-full text-left bg-white border border-neutral-200 rounded-lg px-4 py-3 hover:bg-neutral-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-neutral-800">{scan.shelf_id}</span>
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${scoreBadgeCls(scan.shelf_health_score)}`}>
-                          {scan.shelf_health_score}/100
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-neutral-500">
-                        <span>{scan.gaps_count} gap{scan.gaps_count !== 1 ? 's' : ''}</span>
-                        <span>{timeAgo(scan.created_at)}</span>
-                        <span className="text-neutral-400">{expandedScanId === scan.id ? '▲' : '▼'}</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  {expandedScanId === scan.id && (
-                    <div className="border border-t-0 border-neutral-200 rounded-b-lg px-4 py-3 bg-neutral-50 space-y-3">
-                      {(scan.result_json?.overall_summary) && (
-                        <p className="text-xs text-neutral-600 italic">{scan.result_json.overall_summary}</p>
-                      )}
-                      {(scan.result_json?.gaps ?? []).length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-neutral-600 mb-1">Detected Gaps</p>
-                          <ul className="space-y-1.5">
-                            {(scan.result_json.gaps as any[]).map((gap, i) => (
-                              <li key={i} className="text-xs text-neutral-700">
-                                <span className={gap.severity === 'fully_out'
-                                  ? 'text-red-600 font-semibold'
-                                  : 'text-yellow-600 font-semibold'}>
-                                  {gap.severity === 'fully_out' ? '❌ Empty' : '⚠️ Low'}
-                                </span>{' '}
-                                {gap.estimated_missing_product ?? 'Unknown'} — {gap.location_description}
-                                {(gap.substitutes ?? []).length > 0 && (
-                                  <span className="text-neutral-400 ml-1">
-                                    💡 {(gap.substitutes as any[]).map((s: any) => s.name).join(', ')}
-                                  </span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {(scan.result_json?.prioritized_actions ?? []).slice(0, 3).length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-neutral-600 mb-1">Recommended Actions</p>
-                          <ul className="space-y-1">
-                            {(scan.result_json.prioritized_actions as string[]).slice(0, 3).map((action, i) => (
-                              <li key={i} className="text-xs text-neutral-700 flex gap-1.5">
-                                <span className="text-primary-600 font-bold">•</span> {action}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <RecentScansWidget scans={rawScans} />
           </motion.div>
         )}
 
