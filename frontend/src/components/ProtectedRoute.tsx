@@ -9,8 +9,8 @@ interface ProtectedRouteProps {
 }
 
 const defaultPath = (role: UserRole): string => {
-  if (role === 'admin') return '/dashboard';
-  if (role === 'employee') return '/scanner';
+  if (role === 'manager') return '/dashboard';
+  if (role === 'worker') return '/scanner';
   return '/shelf-status';
 };
 

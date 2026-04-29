@@ -5,10 +5,10 @@ import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import CurrentUser, require_roles
-from app.routes.baseline import get_db
-from app.schemas.analyze import AnalyzeResponse
-from app.services.analyze_service import run_analysis
+from backend.auth.dependencies import CurrentUser, require_roles
+from backend.api_routers.baseline import get_db
+from backend.schemas.analyze import AnalyzeResponse
+from backend.services.analyze_service import run_analysis
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

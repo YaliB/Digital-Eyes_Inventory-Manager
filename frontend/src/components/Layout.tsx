@@ -12,16 +12,16 @@ interface NavLink {
 }
 
 const NAV_LINKS: NavLink[] = [
-  { label: 'Dashboard',    path: '/dashboard',    icon: BarChart3,     roles: ['admin'] },
-  { label: 'Scanner',      path: '/scanner',      icon: ScanLine,      roles: ['admin', 'employee'] },
-  { label: 'My Tasks',     path: '/tasks',        icon: ClipboardList, roles: ['admin', 'employee'] },
-  { label: 'Shelf Status', path: '/shelf-status', icon: Eye,           roles: ['admin', 'employee', 'viewer'] },
+  { label: 'Dashboard',    path: '/dashboard',    icon: BarChart3,     roles: ['manager'] },
+  { label: 'Scanner',      path: '/scanner',      icon: ScanLine,      roles: ['manager', 'worker'] },
+  { label: 'My Tasks',     path: '/tasks',        icon: ClipboardList, roles: ['manager', 'worker'] },
+  { label: 'Shelf Status', path: '/shelf-status', icon: Eye,           roles: ['manager', 'worker', 'supplier'] },
 ];
 
 const ROLE_CHIP: Record<UserRole, string> = {
-  admin:    'bg-primary-100 text-primary-800',
-  employee: 'bg-success-100 text-success-700',
-  viewer:   'bg-neutral-100 text-neutral-600',
+  manager:  'bg-primary-100 text-primary-800',
+  worker:   'bg-success-100 text-success-700',
+  supplier: 'bg-neutral-100 text-neutral-600',
 };
 
 interface LayoutProps {

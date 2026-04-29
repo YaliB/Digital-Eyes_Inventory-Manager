@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 # import sub-routers
 from backend.api_routers.database import (
+	 subr_entities,
     subr_imgs
     )
 
@@ -16,6 +17,11 @@ async def test_database():
 
 router.include_router(
     subr_imgs.router,
-    prefix="/imgs",
-    tags=["database", "imgs"]
+    prefix="/images",
+    tags=["database", "images"]
     )
+
+router.include_router(
+	subr_entities.router,
+	tags=["database"]
+	)

@@ -15,7 +15,7 @@ import logging
 
 import httpx
 
-from app.ai.providers.base import BaseEmbeddingProvider, BaseVisionProvider
+from backend.ai.providers.base import BaseEmbeddingProvider, BaseVisionProvider
 
 logger = logging.getLogger(__name__)
 
