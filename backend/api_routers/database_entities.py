@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.db_core import get_db
 from backend.db.db_models import Inventory, Product, User
-from backend.schemas.database import (
-    DeleteResponse,
+from backend.schemas.common import DeleteResponse
+from backend.schemas.database_entities import (
     InventoryCreate,
     InventoryResponse,
     InventoryUpdate,

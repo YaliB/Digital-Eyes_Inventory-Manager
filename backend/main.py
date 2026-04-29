@@ -3,8 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api_routers import analyze, auth, baseline, history
-from backend.api_routers.database import database_route
+from backend.api_routers import analyze, auth, baseline, database, history
 from backend.db.db_core import init_db
 
 
@@ -27,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(database_route.router)
+app.include_router(database.router)
 app.include_router(auth.router)
 app.include_router(baseline.router)
 app.include_router(analyze.router)
