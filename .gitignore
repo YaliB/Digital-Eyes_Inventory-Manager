@@ -218,4 +218,13 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Claude
-.claude
+.claude/
+.claude/settings.local.json
+
+# Local databases
+*.db
+inventory.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
