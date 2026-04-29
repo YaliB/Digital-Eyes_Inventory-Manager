@@ -5,30 +5,19 @@ For POC we use hardcoded demo users. Yali can wire up real DB users later.
 
 from fastapi import APIRouter, HTTPException, status
 
-from backend.auth.jwt import create_access_token, verify_password, hash_password
+from backend.auth.jwt import create_access_token
 from backend.schemas.auth import LoginRequest, TokenResponse
 
 router = APIRouter(prefix="/auth")
 
 # ── Demo users for hackathon POC ──────────────────────────────────────────────
-# Yali: replace this with a real DB lookup when users table is ready
-# password hashes generated with: hash_password("password")
-DEMO_USERS = {
-    "worker1": {
-        "user_id": "worker1",
-        "role": "worker",
-        "hashed_password": hash_password("worker123"),
-    },
-    "manager1": {
-        "user_id": "manager1",
-        "role": "manager",
-        "hashed_password": hash_password("manager123"),
-    },
-    "supplier1": {
-        "user_id": "supplier1",
-        "role": "supplier",
-        "hashed_password": hash_password("supplier123"),
-    },
+# Passwords are stored in plain text here and compared directly to avoid
+# bcrypt 4.x / passlib import-time hashing incompatibility (ValueError >72 bytes).
+# Yali: replace with real DB lookup + hashed passwords when users table is ready.
+_DEMO_PLAIN: dict[str, dict] = {
+    "worker1":   {"user_id": "worker1",   "role": "worker",   "password": "worker123"},
+    "manager1":  {"user_id": "manager1",  "role": "manager",  "password": "manager123"},
+    "supplier1": {"user_id": "supplier1", "role": "supplier", "password": "supplier123"},
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,9 +32,9 @@ async def login(request: LoginRequest):
       manager1 / manager123
       supplier1 / supplier123
     """
-    user = DEMO_USERS.get(request.username)
+    user = _DEMO_PLAIN.get(request.username)
 
-    if not user or not verify_password(request.password, user["hashed_password"]):
+    if not user or request.password != user["password"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
