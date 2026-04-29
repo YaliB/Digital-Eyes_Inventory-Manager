@@ -8,6 +8,8 @@ import logging
 from backend.ai.prompts import (
     SHELF_COMPARISON_SYSTEM_PROMPT,
     SHELF_COMPARISON_USER_PROMPT,
+    SHELF_SINGLE_IMAGE_SYSTEM_PROMPT,
+    SHELF_SINGLE_IMAGE_USER_PROMPT,
 )
 from backend.ai.providers import get_vision_provider
 
@@ -36,5 +38,39 @@ async def analyze_shelf(
     missing = required_keys - result.keys()
     if missing:
         raise ValueError(f"AI provider response missing keys: {missing}")
+
+    return result
+
+
+async def analyze_single_shelf(
+    image_bytes: bytes,
+    media_type: str = "image/jpeg",
+) -> dict:
+    """
+    Analyze a single shelf image using the configured AI provider.
+    Returns a structured stock report dict.
+    """
+    provider = get_vision_provider()
+    logger.info("Using vision provider for single-image analysis: %s", type(provider).__name__)
+
+    result = await provider.analyze_single_shelf(
+        image_bytes=image_bytes,
+        media_type=media_type,
+        system_prompt=SHELF_SINGLE_IMAGE_SYSTEM_PROMPT,
+        user_prompt=SHELF_SINGLE_IMAGE_USER_PROMPT,
+    )
+
+    required_keys = {
+        "status",
+        "confidence",
+        "summary",
+        "restocking_required",
+        "sections",
+        "restocking_list",
+        "overall_fill_percentage",
+    }
+    missing = required_keys - result.keys()
+    if missing:
+        raise ValueError(f"AI provider single-image response missing keys: {missing}")
 
     return result

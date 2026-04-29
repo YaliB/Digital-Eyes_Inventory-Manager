@@ -8,12 +8,29 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.ai.vision import analyze_shelf as ai_analyze_shelf
-from backend.schemas.analyze import AnalyzeResponse, DetectedGap
+from backend.ai.vision import (
+    analyze_shelf as ai_analyze_shelf,
+    analyze_single_shelf as ai_analyze_single_shelf,
+)
+from backend.schemas.analyze import (
+    AnalyzeResponse,
+    DetectedGap,
+    RestockingItem,
+    ShelfSection,
+    SingleImageAnalyzeResponse,
+)
 from backend.services.health_score import compute_health_score, score_to_color, score_to_label
 from backend.services.substitute_service import find_substitutes
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_fill_percentage(value: object) -> int:
+    try:
+        fill_percentage = int(float(value))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(100, fill_percentage))
 
 
 async def run_analysis(
@@ -186,4 +203,107 @@ async def run_analysis(
         prioritized_actions=prioritized_actions,
         overall_summary=overall_summary,
         gaps_count=len(enriched_gaps),
+    )
+
+
+async def run_single_image_analysis(
+    shelf_id: str,
+    image_bytes: bytes,
+    media_type: str,
+    db: AsyncSession,
+) -> SingleImageAnalyzeResponse:
+    """
+    Single-image analysis pipeline:
+      1. Send the image to the AI vision service.
+      2. Normalize the response into the API schema.
+      3. Persist the scan result without a baseline.
+      4. Return a structured SingleImageAnalyzeResponse.
+    """
+    logger.info("Running single-image AI analysis for shelf=%s", shelf_id)
+    ai_result = await ai_analyze_single_shelf(
+        image_bytes=image_bytes,
+        media_type=media_type,
+    )
+
+    fill_percentage = _normalize_fill_percentage(ai_result.get("overall_fill_percentage"))
+    sections = [
+        ShelfSection(
+            location=str(section.get("location", "")),
+            state=str(section.get("state", "UNKNOWN")),
+            products_present=[str(item) for item in section.get("products_present", [])],
+            gaps_detected=bool(section.get("gaps_detected", False)),
+            notes=str(section.get("notes")) if section.get("notes") else None,
+        )
+        for section in ai_result.get("sections", [])
+        if isinstance(section, dict)
+    ]
+    restocking_list = [
+        RestockingItem(
+            item=str(item.get("item", "")),
+            location=str(item.get("location", "")),
+            urgency=str(item.get("urgency", "LOW")),
+            reason=str(item.get("reason", "")),
+        )
+        for item in ai_result.get("restocking_list", [])
+        if isinstance(item, dict)
+    ]
+
+    scan_id = uuid4()
+    created_at = datetime.now(timezone.utc)
+    result_payload = {
+        "analysis_type": "single_image",
+        "status": str(ai_result.get("status", "PARTIAL")),
+        "confidence": str(ai_result.get("confidence", "MEDIUM")),
+        "summary": str(ai_result.get("summary", "")),
+        "restocking_required": bool(ai_result.get("restocking_required", bool(restocking_list))),
+        "sections": [section.model_dump() for section in sections],
+        "restocking_list": [item.model_dump() for item in restocking_list],
+        "overall_fill_percentage": fill_percentage,
+    }
+
+    try:
+        await db.execute(
+            text("""
+                INSERT INTO scans (
+                    id, shelf_id, baseline_id,
+                    shelf_health_score, gaps_count,
+                    result_json, created_at
+                ) VALUES (
+                    :id, :shelf_id, :baseline_id,
+                    :health_score, :gaps_count,
+                    :result_json::jsonb, :created_at
+                )
+            """),
+            {
+                "id": str(scan_id),
+                "shelf_id": shelf_id,
+                "baseline_id": None,
+                "health_score": fill_percentage,
+                "gaps_count": len(restocking_list),
+                "result_json": json.dumps(result_payload),
+                "created_at": created_at,
+            },
+        )
+        await db.commit()
+        logger.info(
+            "Single-image scan saved: id=%s shelf=%s score=%d restocking_items=%d",
+            scan_id, shelf_id, fill_percentage, len(restocking_list),
+        )
+    except Exception as exc:
+        logger.error("Failed to persist single-image scan for shelf=%s: %s", shelf_id, exc)
+        await db.rollback()
+
+    return SingleImageAnalyzeResponse(
+        shelf_id=shelf_id,
+        scan_id=str(scan_id),
+        status=result_payload["status"],
+        confidence=result_payload["confidence"],
+        summary=result_payload["summary"],
+        restocking_required=result_payload["restocking_required"],
+        sections=sections,
+        restocking_list=restocking_list,
+        overall_fill_percentage=fill_percentage,
+        shelf_health_score=fill_percentage,
+        shelf_health_label=score_to_label(fill_percentage),
+        shelf_health_color=score_to_color(fill_percentage),
     )
