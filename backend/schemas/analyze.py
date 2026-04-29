@@ -33,3 +33,33 @@ class AnalyzeResponse(BaseModel):
     prioritized_actions: list[str]
     overall_summary: str
     gaps_count: int
+
+
+class ShelfSection(BaseModel):
+    location: str
+    state: str
+    products_present: list[str]
+    gaps_detected: bool
+    notes: str | None = None
+
+
+class RestockingItem(BaseModel):
+    item: str
+    location: str
+    urgency: str
+    reason: str
+
+
+class SingleImageAnalyzeResponse(BaseModel):
+    shelf_id: str
+    scan_id: str | None = None
+    status: str
+    confidence: str
+    summary: str
+    restocking_required: bool
+    sections: list[ShelfSection]
+    restocking_list: list[RestockingItem]
+    overall_fill_percentage: int
+    shelf_health_score: int
+    shelf_health_label: str
+    shelf_health_color: str
