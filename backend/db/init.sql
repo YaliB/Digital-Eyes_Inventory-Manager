@@ -55,21 +55,6 @@ CREATE TABLE IF NOT EXISTS users (
     uploaded_photos INTEGER DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS products_legacy (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(200),
-    category VARCHAR(100)
-);
-
-CREATE TABLE IF NOT EXISTS inventory (
-    id SERIAL PRIMARY KEY,
-    product_id INTEGER NOT NULL REFERENCES products_legacy(id),
-    category VARCHAR,
-    quantity INTEGER NOT NULL,
-    on_shelf BOOLEAN,
-    shelf_restock INTEGER
-);
-
 CREATE TABLE IF NOT EXISTS images (
     id SERIAL PRIMARY KEY,
     filename VARCHAR NOT NULL,

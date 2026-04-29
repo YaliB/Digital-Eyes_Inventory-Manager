@@ -9,8 +9,6 @@ from backend.api_routers import (
     baseline,
     history,
     images,
-    inventory,
-    products,
     users,
 )
 from backend.db.db_core import init_db
@@ -20,6 +18,7 @@ from backend.db.db_core import init_db
 async def lifespan(_: FastAPI):
     await init_db()
     yield
+
 
 app = FastAPI(
     title="Digital-Eyes_Inventory-Manager",
@@ -40,8 +39,6 @@ app.include_router(baseline.router)
 app.include_router(analyze.router)
 app.include_router(history.router)
 app.include_router(users.router)
-app.include_router(products.router)
-app.include_router(inventory.router)
 app.include_router(images.router)
 
 
