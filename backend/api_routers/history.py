@@ -1,6 +1,7 @@
 """
 GET /history — scan history for dashboard.
-Accessible by: manager, supplier, worker.
+Accessible by: manager (all shelves), supplier (read-only, all shelves).
+Workers cannot see history (they only scan).
 """
 
 import logging
@@ -30,7 +31,7 @@ async def get_history(
 
     - manager: can filter by shelf_id, sees all analytics
     - supplier: read-only view, same data
-    - worker: sees their shelf scan history
+    - worker: 403 Forbidden
     """
     offset = (page - 1) * limit
 
@@ -72,7 +73,6 @@ async def get_history(
                 shelf_id=row.shelf_id,
                 shelf_health_score=row.shelf_health_score,
                 gaps_count=row.gaps_count,
-                result_json=row.result_json,
                 created_at=row.created_at,
             )
             for row in rows
