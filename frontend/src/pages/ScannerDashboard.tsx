@@ -1,64 +1,77 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ScanTask } from '@/types';
+import * as api from '@/services/api';
+
+// Map shelf_id to human-readable location
+const SHELF_META: Record<string, { aisle: string; shelf: string; name: string }> = {
+  'shelf-1': { aisle: 'Aisle 3', shelf: 'Snacks',    name: 'Snacks Shelf A' },
+  'shelf-2': { aisle: 'Aisle 1', shelf: 'Dairy',     name: 'Dairy Shelf B' },
+  'shelf-3': { aisle: 'Aisle 5', shelf: 'Beverages', name: 'Beverages Shelf C' },
+};
+
+function scoreToPriority(score: number | null): ScanTask['priority'] {
+  if (score === null || score < 50) return 'high';
+  if (score < 75) return 'medium';
+  return 'low';
+}
+
+function scoreToStatus(score: number | null): ScanTask['status'] {
+  if (score === null || score < 60) return 'pending';
+  if (score < 85) return 'in_progress';
+  return 'completed';
+}
+
+function scanToTask(scan: any): ScanTask {
+  const meta = SHELF_META[scan.shelf_id] ?? {
+    aisle: scan.shelf_id,
+    shelf: 'Unknown',
+    name: scan.shelf_id,
+  };
+  const score: number | null = scan.shelf_health_score ?? null;
+  const gaps: number = scan.gaps_count ?? 0;
+
+  return {
+    id: scan.id,
+    aisle: meta.aisle,
+    shelf: meta.shelf,
+    priority: scoreToPriority(score),
+    status: scoreToStatus(score),
+    description: `${meta.name} — ${gaps} gap${gaps !== 1 ? 's' : ''} detected${score !== null ? ` · Health ${score}/100` : ''}`,
+    lastScanned: scan.created_at ? new Date(scan.created_at) : undefined,
+  };
+}
 
 export const ScannerDashboard = () => {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<ScanTask[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
-  useEffect(() => {
-    // Mock tasks data
-    const mockTasks: ScanTask[] = [
-      {
-        id: '1',
-        aisle: 'A1',
-        shelf: 'Top',
-        priority: 'high',
-        status: 'pending',
-        description: 'Beverages - Cola Section',
-        lastScanned: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      },
-      {
-        id: '2',
-        aisle: 'B3',
-        shelf: 'Middle',
-        priority: 'high',
-        status: 'pending',
-        description: 'Snacks - Chips & Cookies',
-      },
-      {
-        id: '3',
-        aisle: 'C2',
-        shelf: 'Bottom',
-        priority: 'medium',
-        status: 'completed',
-        description: 'Dairy Products',
-        lastScanned: new Date(Date.now() - 30 * 60 * 1000),
-      },
-      {
-        id: '4',
-        aisle: 'D1',
-        shelf: 'Top',
-        priority: 'medium',
-        status: 'in_progress',
-        description: 'Cereals & Breakfast Items',
-      },
-      {
-        id: '5',
-        aisle: 'A2',
-        shelf: 'Middle',
-        priority: 'low',
-        status: 'pending',
-        description: 'Spices & Condiments',
-      },
-    ];
-    setTasks(mockTasks);
-  }, []);
+  const loadTasks = async () => {
+    setIsLoading(true);
+    setFetchError('');
+    try {
+      const data = await api.getHistory({ limit: 20 }) as any;
+      const scans: any[] = data.scans ?? [];
+      if (scans.length === 0) {
+        setTasks([]);
+      } else {
+        setTasks(scans.map(scanToTask));
+      }
+    } catch (err: any) {
+      setFetchError(err.message || 'Failed to load tasks');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { loadTasks(); }, []);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -88,6 +101,24 @@ export const ScannerDashboard = () => {
   return (
     <Layout headerTitle="Task Dashboard">
       <div className="px-4 py-6 space-y-6">
+
+        {/* Loading / Error states */}
+        {isLoading && (
+          <p className="text-center text-sm text-neutral-500 py-8">Loading tasks...</p>
+        )}
+        {!isLoading && fetchError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+            {fetchError}
+          </div>
+        )}
+        {!isLoading && !fetchError && tasks.length === 0 && (
+          <div className="text-center py-12 space-y-3">
+            <p className="text-neutral-500 text-sm">No scan history yet.</p>
+            <Button onClick={() => navigate('/scanner')}>Go scan a shelf</Button>
+          </div>
+        )}
+
+        {!isLoading && tasks.length > 0 && <>
         {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-3">
           <motion.div
@@ -174,8 +205,16 @@ export const ScannerDashboard = () => {
           </div>
         </div>
 
-        {/* Footer Button */}
-        <div className="pt-4">
+        {/* Footer Buttons */}
+        <div className="pt-4 space-y-3">
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={loadTasks}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh Tasks
+          </Button>
           <Button
             variant="outline"
             fullWidth
@@ -184,6 +223,7 @@ export const ScannerDashboard = () => {
             View Shelf Status
           </Button>
         </div>
+        </>}
       </div>
     </Layout>
   );

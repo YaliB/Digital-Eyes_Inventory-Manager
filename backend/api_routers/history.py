@@ -22,7 +22,7 @@ async def get_history(
     shelf_id: str | None = Query(default=None),
     limit: int = Query(default=20, le=100),
     page: int = Query(default=1, ge=1),
-    user: CurrentUser = Depends(require_roles("manager", "supplier")),
+    user: CurrentUser = Depends(require_roles("manager", "supplier", "worker")),
     db: AsyncSession = Depends(get_db),
 ):
     """

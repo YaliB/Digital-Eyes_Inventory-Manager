@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Camera, Upload, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Alert } from '@/components/Alert';
 import { LoadingState } from '@/components/LoadingState';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { AnalysisResult } from '@/types';
+import * as api from '@/services/api';
 
 export const ScannerPage = () => {
   const navigate = useNavigate();
@@ -20,6 +21,11 @@ export const ScannerPage = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [aisle, setAisle] = useState('');
   const [shelf, setShelf] = useState('');
+  const [shelfId, setShelfId] = useState('shelf-1');
+  const [healthScore, setHealthScore] = useState<number | null>(null);
+  const [gapSubstitutes, setGapSubstitutes] = useState<string[][]>([]);
+  const [baselineMsg, setBaselineMsg] = useState('');
+  const [loadingMsg, setLoadingMsg] = useState('📸 Uploading image...');
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.currentTarget.files?.[0];
@@ -36,51 +42,76 @@ export const ScannerPage = () => {
 
     setLoading(true);
     setProcessingState('processing');
+    setLoadingMsg('📸 Uploading image...');
 
-    // Simulate API call with processing time
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    try {
+      const startTime = Date.now();
+      const data = await api.analyzeShelf(shelfId, file) as any;
+      const elapsed = (Date.now() - startTime) / 1000;
 
-    // Mock analysis result with bounding boxes
-    const mockResult: AnalysisResult = {
-      id: 'analysis-' + Date.now(),
-      imageUrl: preview || '',
-      timestamp: new Date(),
-      aisle,
-      shelf,
-      boundingBoxes: [
-        {
-          x: 50,
-          y: 100,
-          width: 80,
-          height: 120,
-          label: 'Cola - Stock',
-          confidence: 0.95,
-        },
-        {
-          x: 150,
-          y: 100,
-          width: 80,
-          height: 120,
-          label: 'Cola - Out of Stock',
-          confidence: 0.92,
-        },
-        {
-          x: 250,
-          y: 100,
-          width: 80,
-          height: 120,
-          label: 'Sprite - Stock',
-          confidence: 0.88,
-        },
-      ],
-      outOfStockItems: ['Cola (Position 2)', 'Orange Juice'],
-      anomalies: ['Damaged packaging detected', 'Expiration date approaching'],
-      processingTime: 3.2,
-    };
+      // Map gaps → outOfStockItems strings
+      const gaps: any[] = data.gaps ?? [];
+      const outOfStockItems = gaps.map((gap: any) => {
+        const prefix = gap.severity === 'fully_out' ? '❌ Empty' : '⚠️ Low Stock';
+        const product = gap.estimated_missing_product ?? 'Unknown product';
+        return `${prefix} — ${product} (${gap.location_description})`;
+      });
 
-    setAnalysisResult(mockResult);
-    setProcessingState('results');
-    setLoading(false);
+      // Map gaps → substitutes parallel array
+      const substitutes = gaps.map((gap: any) =>
+        (gap.substitutes ?? []).map((s: any) => s.name).filter(Boolean)
+      );
+
+      // Map gaps → bounding boxes (bbox_relative is [x1%, y1%, x2%, y2%])
+      const boundingBoxes = gaps.map((gap: any) => {
+        const [x1, y1, x2, y2] = gap.bbox_relative ?? [0, 0, 10, 10];
+        return {
+          x: x1,
+          y: y1,
+          width: x2 - x1,
+          height: y2 - y1,
+          label: gap.severity === 'fully_out' ? 'Out of Stock' : 'Low Stock',
+          confidence: gap.confidence ?? 0,
+        };
+      });
+
+      const result: AnalysisResult = {
+        id: 'analysis-' + Date.now(),
+        imageUrl: preview || '',
+        timestamp: new Date(),
+        aisle,
+        shelf,
+        boundingBoxes,
+        outOfStockItems,
+        anomalies: data.prioritized_actions ?? [],
+        processingTime: elapsed,
+      };
+
+      setHealthScore(data.shelf_health_score ?? null);
+      setGapSubstitutes(substitutes);
+      setAnalysisResult(result);
+      setProcessingState('results');
+    } catch (err: any) {
+      setError(err.message || 'Analysis failed. Please try again.');
+      setProcessingState('idle');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBaseline = async () => {
+    if (!file) {
+      setError('Please select an image first');
+      return;
+    }
+    try {
+      await api.uploadBaseline(shelfId, file);
+      setBaselineMsg('✅ Baseline saved!');
+      setTimeout(() => setBaselineMsg(''), 2000);
+    } catch (err: any) {
+      setBaselineMsg('Failed to save baseline');
+      setTimeout(() => setBaselineMsg(''), 2000);
+    }
   };
 
   const handleNewScan = () => {
@@ -89,13 +120,33 @@ export const ScannerPage = () => {
     setAnalysisResult(null);
     setAisle('');
     setShelf('');
+    setHealthScore(null);
+    setGapSubstitutes([]);
+    setBaselineMsg('');
   };
+
+  const LOADING_MESSAGES = [
+    '📸 Uploading image...',
+    '🧠 AI is comparing with baseline...',
+    '🔍 Identifying gaps...',
+    '💡 Finding substitutes...',
+  ];
+
+  useEffect(() => {
+    if (processingState !== 'processing') return;
+    let idx = 0;
+    const interval = setInterval(() => {
+      idx = (idx + 1) % LOADING_MESSAGES.length;
+      setLoadingMsg(LOADING_MESSAGES[idx]);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [processingState]);
 
   if (processingState === 'processing') {
     return (
       <Layout headerTitle="Scanning Shelf">
         <div className="px-4 py-12">
-          <LoadingState state="loading" message="Analyzing shelf with AI..." />
+          <LoadingState state="loading" message={loadingMsg} />
           <div className="mt-8 space-y-3 text-center">
             <p className="text-sm text-neutral-600">
               Aisle: <span className="font-semibold">{aisle}</span>
@@ -109,10 +160,25 @@ export const ScannerPage = () => {
     );
   }
 
+  const healthBadge = (score: number) => {
+    if (score >= 85) return { bg: 'bg-green-100 text-green-800',  label: `✅ Shelf Healthy (${score}/100)` };
+    if (score >= 60) return { bg: 'bg-yellow-100 text-yellow-800', label: `⚠️ Attention Needed (${score}/100)` };
+    if (score >= 35) return { bg: 'bg-orange-100 text-orange-800', label: `🔴 Critical (${score}/100)` };
+    return              { bg: 'bg-red-100 text-red-800',           label: `🚨 Emergency (${score}/100)` };
+  };
+
   if (processingState === 'results' && analysisResult) {
+    const badge = healthScore !== null ? healthBadge(healthScore) : null;
     return (
       <Layout headerTitle="Analysis Results">
         <div className="px-4 py-6 space-y-6">
+          {/* Health Score Badge */}
+          {badge && (
+            <div className={`px-4 py-3 rounded-xl font-semibold text-sm text-center ${badge.bg}`}>
+              {badge.label}
+            </div>
+          )}
+
           {/* Result Image with Bounding Boxes */}
           <Card className="overflow-hidden">
             <div className="relative bg-neutral-100 aspect-video flex items-center justify-center">
@@ -126,6 +192,8 @@ export const ScannerPage = () => {
                   {/* Overlay for bounding boxes */}
                   <svg
                     className="absolute inset-0 w-full h-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
                     style={{ mixBlendMode: 'multiply' }}
                   >
                     {analysisResult.boundingBoxes.map((box, idx) => (
@@ -141,15 +209,15 @@ export const ScannerPage = () => {
                         />
                         <rect
                           x={box.x}
-                          y={box.y - 24}
-                          width={150}
-                          height="20"
+                          y={Math.max(0, box.y - 6)}
+                          width={box.width}
+                          height="5"
                           fill={box.label.includes('Out of Stock') ? '#dc2626' : '#16a34a'}
                         />
                         <text
-                          x={box.x + 4}
-                          y={box.y - 8}
-                          fontSize="12"
+                          x={box.x + 0.5}
+                          y={Math.max(4.5, box.y - 1.5)}
+                          fontSize="3"
                           fill="white"
                           fontWeight="bold"
                         >
@@ -180,11 +248,18 @@ export const ScannerPage = () => {
                 <div className="w-3 h-3 bg-alert-600 rounded-full" />
                 <h3 className="font-semibold text-neutral-900">Out of Stock</h3>
               </div>
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {analysisResult.outOfStockItems.map((item, idx) => (
-                  <li key={idx} className="text-sm text-neutral-600 flex items-center gap-2">
-                    <span className="text-alert-600">•</span>
-                    {item}
+                  <li key={idx} className="text-sm text-neutral-600">
+                    <div className="flex items-start gap-2">
+                      <span className="text-alert-600">•</span>
+                      <span>{item}</span>
+                    </div>
+                    {gapSubstitutes[idx]?.length > 0 && (
+                      <p className="text-xs text-neutral-400 mt-1 ml-4">
+                        💡 Try: {gapSubstitutes[idx].join(', ')}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -318,6 +393,20 @@ export const ScannerPage = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm font-semibold text-neutral-700 mb-1">
+                      Select Shelf
+                    </label>
+                    <select
+                      value={shelfId}
+                      onChange={(e) => setShelfId(e.target.value)}
+                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white"
+                    >
+                      <option value="shelf-1">shelf-1 — Snacks (Aisle 3)</option>
+                      <option value="shelf-2">shelf-2 — Dairy (Aisle 1)</option>
+                      <option value="shelf-3">shelf-3 — Beverages (Aisle 5)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-neutral-700 mb-1">
                       Aisle Number
                     </label>
                     <input
@@ -359,6 +448,18 @@ export const ScannerPage = () => {
                     Analyze
                   </Button>
                 </div>
+                <Button
+                  variant="outline"
+                  fullWidth
+                  onClick={handleBaseline}
+                >
+                  Set as Baseline
+                </Button>
+                {baselineMsg && (
+                  <p className={`text-sm text-center font-medium ${baselineMsg.startsWith('✅') ? 'text-green-600' : 'text-red-500'}`}>
+                    {baselineMsg}
+                  </p>
+                )}
               </div>
             )}
           </div>
