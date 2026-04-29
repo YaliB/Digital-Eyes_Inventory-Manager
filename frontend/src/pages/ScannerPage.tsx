@@ -17,6 +17,22 @@ const LOADING_MESSAGES = [
   '💡 Finding substitutes...',
 ];
 
+function methodBadge(method: string, confidence: string | null) {
+  if (method === 'baseline_comparison') {
+    return { bg: 'bg-blue-100 text-blue-800', label: '🔄 Baseline comparison (confidence fallback)' };
+  }
+  if (method === 'single_image_fallback') {
+    return { bg: 'bg-orange-100 text-orange-800', label: '⚠️ Direct scan — low confidence (no baseline)' };
+  }
+  if (confidence === 'HIGH') {
+    return { bg: 'bg-green-100 text-green-800', label: '🎯 Direct scan — HIGH confidence' };
+  }
+  if (confidence === 'MEDIUM') {
+    return { bg: 'bg-yellow-100 text-yellow-800', label: '🎯 Direct scan — MEDIUM confidence' };
+  }
+  return { bg: 'bg-neutral-100 text-neutral-700', label: '🔍 Analysis complete' };
+}
+
 function healthBadge(score: number) {
   if (score >= 85) return { bg: 'bg-green-100 text-green-800', label: `✅ Shelf Healthy (${score}/100)` };
   if (score >= 60) return { bg: 'bg-yellow-100 text-yellow-800', label: `⚠️ Attention Needed (${score}/100)` };
@@ -65,6 +81,8 @@ export const ScannerPage = () => {
   const [gapSubstitutes, setGapSubstitutes] = useState<string[][]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
+  const [analysisMethod, setAnalysisMethod] = useState<string>('');
+  const [aiConfidence, setAiConfidence] = useState<string | null>(null);
   const analysisCameraRef = useRef<HTMLInputElement>(null);
   const analysisFileRef = useRef<HTMLInputElement>(null);
 
@@ -157,6 +175,8 @@ export const ScannerPage = () => {
       });
 
       setHealthScore(data.shelf_health_score ?? null);
+      setAnalysisMethod(data.analysis_method ?? 'baseline_comparison');
+      setAiConfidence(data.ai_confidence ?? null);
       setGapSubstitutes(substitutes);
       setAnalysisResult({
         id: 'analysis-' + Date.now(),
@@ -188,6 +208,8 @@ export const ScannerPage = () => {
     setHealthScore(null);
     setGapSubstitutes([]);
     setPageError(null);
+    setAnalysisMethod('');
+    setAiConfidence(null);
   };
 
   // ── Processing screen ──────────────────────────────────────────────────
@@ -204,9 +226,14 @@ export const ScannerPage = () => {
   // ── Results screen ────────────────────────────────────────────────────
   if (processingState === 'results' && analysisResult) {
     const badge = healthScore !== null ? healthBadge(healthScore) : null;
+    const mBadge = methodBadge(analysisMethod, aiConfidence);
     return (
       <Layout headerTitle="Analysis Results">
         <div className="px-4 py-6 space-y-6">
+          {/* Method badge — which AI path was taken */}
+          <div className={`px-4 py-2 rounded-xl text-xs font-semibold text-center ${mBadge.bg}`}>
+            {mBadge.label}
+          </div>
           {badge && (
             <div className={`px-4 py-3 rounded-xl font-semibold text-sm text-center ${badge.bg}`}>
               {badge.label}
@@ -394,23 +421,23 @@ export const ScannerPage = () => {
 
         {/* ══ Section B: Shelf Analysis ════════════════════════════════════ */}
         <Card className="overflow-hidden">
-          <div className={`p-4 ${baselineStatus?.exists
-            ? 'bg-gradient-to-br from-primary-600 to-primary-800'
-            : 'bg-neutral-400'}`}>
+          <div className="p-4 bg-gradient-to-br from-primary-600 to-primary-800">
             <h2 className="text-white font-semibold text-base">🔍 Analyze Current State</h2>
-            <p className={`text-xs mt-0.5 ${baselineStatus?.exists ? 'text-primary-100' : 'text-neutral-200'}`}>
-              Compare current shelf photo against baseline
+            <p className="text-primary-100 text-xs mt-0.5">
+              {baselineStatus?.exists
+                ? 'Baseline available — will use comparison mode if needed'
+                : 'Single-image AI mode — no baseline required'}
             </p>
           </div>
           <div className="p-4 space-y-4">
-
-            {!baselineStatus?.exists ? (
-              /* Disabled state */
-              <div className="flex items-center justify-center gap-2 px-3 py-6 bg-neutral-50 border border-neutral-200 rounded-lg text-sm text-neutral-500">
-                <AlertTriangle className="w-4 h-4" />
-                Set a baseline first to enable analysis
+            {/* Baseline hint — informational only, not a gate */}
+            {!baselineStatus?.exists && !isCheckingBaseline && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                No baseline set — AI will use single-image mode. Upload a baseline for richer gap detection.
               </div>
-            ) : (
+            )}
+            {true && (
               <>
                 {/* Analysis image upload */}
                 <input
