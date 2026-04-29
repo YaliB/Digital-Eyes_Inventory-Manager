@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import CurrentUser, require_roles
-from backend.api_routers.baseline import get_db
+from backend.db.db_core import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import CurrentUser, require_roles
-from backend.api_routers.baseline import get_db
+from backend.db.db_core import get_db
 from backend.schemas.analyze import AnalyzeResponse
 from backend.services.analyze_service import run_analysis
 
