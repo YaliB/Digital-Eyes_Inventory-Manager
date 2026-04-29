@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 # import sub-routers
-from api_routers.database import (
-    subr_db_imgs
+from backend.api_routers.database import (
+    subr_imgs
     )
 
 router = APIRouter(
@@ -15,7 +15,7 @@ async def test_database():
     return {"message": "Database route is working!"}
 
 router.include_router(
-    subr_db_imgs.router,
+    subr_imgs.router,
     prefix="/imgs",
     tags=["database", "imgs"]
     )
