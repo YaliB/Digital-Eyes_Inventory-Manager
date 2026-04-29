@@ -159,6 +159,7 @@ async def run_analysis(
             "overall_summary": overall_summary,
         }
 
+        await db.rollback()  # clear any lingering failed-tx state from gap enrichment
         await db.execute(
             text("""
                 INSERT INTO scans (
@@ -168,7 +169,7 @@ async def run_analysis(
                 ) VALUES (
                     :id, :shelf_id, :baseline_id,
                     :health_score, :gaps_count,
-                    :result_json::jsonb, :created_at
+                    CAST(:result_json AS jsonb), :created_at
                 )
             """),
             {
@@ -187,7 +188,7 @@ async def run_analysis(
             scan_id, shelf_id, health_score, len(enriched_gaps),
         )
     except Exception as exc:
-        logger.error("Failed to persist scan for shelf=%s: %s", shelf_id, exc)
+        logger.error("Failed to persist scan for shelf=%s: %s", shelf_id, exc, exc_info=True)
         await db.rollback()
         # Do not raise — return result even if persistence fails
 
@@ -271,7 +272,7 @@ async def run_single_image_analysis(
                 ) VALUES (
                     :id, :shelf_id, :baseline_id,
                     :health_score, :gaps_count,
-                    :result_json::jsonb, :created_at
+                    CAST(:result_json AS jsonb), :created_at
                 )
             """),
             {
@@ -290,7 +291,7 @@ async def run_single_image_analysis(
             scan_id, shelf_id, fill_percentage, len(restocking_list),
         )
     except Exception as exc:
-        logger.error("Failed to persist single-image scan for shelf=%s: %s", shelf_id, exc)
+        logger.error("Failed to persist single-image scan for shelf=%s: %s", shelf_id, exc, exc_info=True)
         await db.rollback()
 
     return SingleImageAnalyzeResponse(

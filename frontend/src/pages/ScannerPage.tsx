@@ -196,14 +196,6 @@ export const ScannerPage = () => {
       <Layout headerTitle="Scanning Shelf">
         <div className="px-4 py-12">
           <LoadingState state="loading" message={loadingMsg} />
-          <div className="mt-8 space-y-3 text-center">
-            <p className="text-sm text-neutral-600">
-              Aisle: <span className="font-semibold">{aisle || '—'}</span>
-            </p>
-            <p className="text-sm text-neutral-600">
-              Shelf: <span className="font-semibold">{shelf || '—'}</span>
-            </p>
-          </div>
         </div>
       </Layout>
     );
@@ -246,9 +238,9 @@ export const ScannerPage = () => {
             </div>
             <div className="p-4 border-t border-neutral-200">
               <p className="text-sm text-neutral-600">
-                <span className="font-semibold">Location:</span> Aisle {analysisResult.aisle}, Shelf {analysisResult.shelf}
+                <span className="font-semibold">Shelf:</span> {shelfId}
               </p>
-              <p className="text-sm text-neutral-600 mt-2">
+              <p className="text-sm text-neutral-600 mt-1">
                 <span className="font-semibold">Processing Time:</span> {analysisResult.processingTime.toFixed(1)}s
               </p>
             </div>
@@ -465,30 +457,6 @@ export const ScannerPage = () => {
                     </motion.button>
                   </div>
                 )}
-
-                {/* Location inputs */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-1">Aisle Number</label>
-                    <input
-                      type="text"
-                      value={aisle}
-                      onChange={(e) => setAisle(e.target.value)}
-                      placeholder="e.g., A1"
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-1">Shelf Level</label>
-                    <input
-                      type="text"
-                      value={shelf}
-                      onChange={(e) => setShelf(e.target.value)}
-                      placeholder="e.g., Top, Middle, Bottom"
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
-                  </div>
-                </div>
 
                 <Button
                   fullWidth
