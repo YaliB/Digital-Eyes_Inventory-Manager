@@ -17,7 +17,7 @@ class User(Base):
     uploaded_photos = Column(Integer, default=0)
     
 class Product(Base):
-    __tablename__ = "products"
+    __tablename__ = "products_legacy"
 
     id = Column(Integer, primary_key=True, index=True)
     category = Column(String, index=True, nullable=True)
@@ -26,12 +26,12 @@ class Product(Base):
     price = Column(Integer, nullable=True)
     price_on_sale = Column(Integer, nullable=True)
     sale_expiration_date = Column(DateTime, nullable=True)
-    
+
 class Inventory(Base):
     __tablename__ = "inventory"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products_legacy.id"), nullable=False)
     category = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     on_shelf = Column(Boolean, default=True)
