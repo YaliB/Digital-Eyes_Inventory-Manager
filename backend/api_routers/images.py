@@ -12,7 +12,7 @@ from backend.db.db_models import Image
 from backend.schemas.common import DeleteResponse
 from backend.schemas.database_images import ImageResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/images", tags=["images"])
 
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
@@ -20,7 +20,6 @@ ALLOWED_CONTENT_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
-UPLOADS_DIR = Path(__file__).resolve().parents[1] / "uploads" / "images"
 
 
 def _build_relative_image_path(filename: str, media_type: str) -> Path:
