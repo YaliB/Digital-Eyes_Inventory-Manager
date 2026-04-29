@@ -4,13 +4,13 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import CurrentUser, require_roles
 from backend.db.db_core import get_db
-from backend.schemas.baseline import BaselineUploadResponse
+from backend.schemas.baseline import BaselineStatusResponse, BaselineUploadResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -67,4 +67,35 @@ async def upload_baseline(
         baseline_id=baseline_id,
         shelf_id=shelf_id,
         captured_at=captured_at,
+    )
+
+
+@router.get("/baseline/status", response_model=BaselineStatusResponse)
+async def get_baseline_status(
+    shelf_id: str = Query(...),
+    user: CurrentUser = Depends(require_roles("worker", "manager")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Check if a baseline exists for the given shelf.
+    Returns the most recent baseline metadata (no image bytes).
+    Accessible by: worker, manager.
+    """
+    result = await db.execute(
+        text("""
+            SELECT id, captured_at
+            FROM baselines
+            WHERE shelf_id = :shelf_id
+            ORDER BY captured_at DESC
+            LIMIT 1
+        """),
+        {"shelf_id": shelf_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        return BaselineStatusResponse(exists=False)
+    return BaselineStatusResponse(
+        exists=True,
+        captured_at=row.captured_at,
+        baseline_id=str(row.id),
     )
