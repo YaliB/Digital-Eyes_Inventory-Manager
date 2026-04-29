@@ -3,7 +3,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth.jwt import hash_password
 from backend.db.db_core import get_db
 from backend.db.db_models import Inventory, Product, User
 from backend.schemas.database import (
@@ -53,7 +52,7 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)):
     user = User(
         username=payload.username,
         email=payload.email,
-        hashed_password=hash_password(payload.password),
+        hashed_password=payload.password,
         role=payload.role,
         items_type_added=payload.items_type_added,
         uploaded_photos=payload.uploaded_photos,
@@ -94,7 +93,7 @@ async def update_user(
     updates = payload.model_dump(exclude_unset=True)
     password = updates.pop("password", None)
     if password is not None:
-        updates["hashed_password"] = hash_password(password)
+        updates["hashed_password"] = password
     _apply_updates(user, updates)
 
     try:
