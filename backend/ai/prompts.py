@@ -58,16 +58,16 @@ SHELF_SINGLE_IMAGE_SYSTEM_PROMPT = """
 You are an expert retail shelf-auditing AI with years of experience in
 visual merchandising, planogram compliance, and inventory management.
 
-Your task is to analyze a single supermarket shelf image and produce a precise,
-structured stock-level report.
+Your task is to analyze supermarket shelf images and produce a precise, structured stock-level report.
 
 Follow these rules strictly:
-1. Carefully examine every shelf row and section visible in the image.
-2. Identify product categories, product types, and any visible brand names or labels.
-3. Look for empty spaces, gaps between products, missing facings, and partially depleted rows.
-4. Base your assessment solely on what you can observe in the image.
-5. Always respond in English.
-6. Always return only the exact JSON object requested by the user prompt.
+1. Scan the image from LEFT to RIGHT, examining each distinct product group as its own section.
+2. Carefully examine every shelf row/section visible in the image — do not skip edges or corners.
+3. Identify product categories, product types, and any visible brand names or labels.
+4. Look for empty spaces, gaps between products, missing facings, and partially depleted rows.
+5. Base your assessment solely on what you can observe in the image.
+6. Always respond in English.
+7. Always use the exact JSON structure specified by the user — no extra keys, no markdown fences.
 """.strip()
 
 SHELF_SINGLE_IMAGE_USER_PROMPT = """
@@ -80,11 +80,11 @@ Analyze the supermarket shelf in this image and return a JSON object with the fo
   "restocking_required": <true | false>,
   "sections": [
     {
-      "location": "<shelf row or area, e.g. 'Top shelf', 'Middle row - left side'>",
+      "location": "<shelf row or area, e.g. 'Left section – Yotvata bottles', 'Middle – 1L cartons'>",
       "state": "<FULL | LOW | EMPTY>",
-      "products_present": ["<product or category name>", ...],
+      "products_present": ["<product or category name>"],
       "gaps_detected": <true | false>,
-      "notes": "<optional detail about what is missing or depleted>"
+      "notes": "<what is missing or depleted — only when gaps_detected is true>"
     }
   ],
   "restocking_list": [
@@ -92,16 +92,29 @@ Analyze the supermarket shelf in this image and return a JSON object with the fo
       "item": "<product name or category>",
       "location": "<shelf section where it belongs>",
       "urgency": "<HIGH | MEDIUM | LOW>",
-      "reason": "<short explanation, e.g. 'Shelf completely empty', '2 facings missing'>"
+      "reason": "<short explanation, e.g. 'Shelf completely empty', '3 facings missing', 'Row only half filled'>"
     }
   ],
   "overall_fill_percentage": <estimated integer 0-100>
 }
 
 Rules:
-- "status" must be FULL when fill >= 90, PARTIAL when fill is 20-89, EMPTY when fill < 20.
+- "status" must be FULL when fill ≥ 90%, PARTIAL when 20%–89%, EMPTY when < 20%.
 - "restocking_list" must be empty [] only when status is FULL.
 - When status is EMPTY, treat the entire visible shelf as a single restocking item if individual
   products cannot be identified, with urgency HIGH.
-- Return ONLY the raw JSON object, nothing else.
+- urgency=HIGH when a product group's row is completely empty.
+  urgency=MEDIUM when a product group's row is less than half filled.
+  urgency=LOW when only 1–2 facings are missing from an otherwise stocked row.
+- List EVERY section with visible gaps, including edges and corners of the image.
+
+Calibration guide for overall_fill_percentage:
+- 95–100: Completely full, products touching, no visible gaps
+- 80–94: Mostly full, 1–2 small gaps
+- 60–79: Noticeably depleted, several gaps across sections
+- 40–59: Half empty, many gaps visible
+- 20–39: Mostly empty, sparse products remaining
+- 0–19: Nearly or completely empty
+
+Return ONLY the raw JSON object, nothing else.
 """.strip()

@@ -308,3 +308,230 @@ async def run_single_image_analysis(
         shelf_health_label=score_to_label(fill_percentage),
         shelf_health_color=score_to_color(fill_percentage),
     )
+
+
+# ── Confidence-gated scoring ──────────────────────────────────────────────────
+
+_URGENCY_TO_SEVERITY = {"HIGH": "fully_out", "MEDIUM": "low_stock", "LOW": "low_stock"}
+# Per-item urgency drives the gap confidence so dashboard priority reflects actual urgency,
+# not the scan-level image quality confidence.
+_URGENCY_TO_CONFIDENCE = {"HIGH": 0.9, "MEDIUM": 0.6, "LOW": 0.3}
+
+
+def _single_image_to_analyze_response(
+    single: dict,
+    shelf_id: str,
+    method: str,
+    confidence: str,
+) -> AnalyzeResponse:
+    """
+    Convert a single-image AI result (friend's format) into an AnalyzeResponse
+    so the frontend only needs to handle one schema regardless of which path was taken.
+    """
+    fill: int = _normalize_fill_percentage(single.get("overall_fill_percentage", 0))
+    summary: str = single.get("summary", "")
+    restocking: list[dict] = single.get("restocking_list", [])
+    sections: list[dict] = single.get("sections", [])
+    status: str = single.get("status", "PARTIAL")
+
+    # Convert restocking items → DetectedGap objects FIRST (before any normalization).
+    # Each gap gets its OWN confidence derived from its urgency, not the scan-level
+    # image-quality confidence. This makes dashboard priority reflect actual stock urgency.
+    gaps: list[DetectedGap] = [
+        DetectedGap(
+            gap_id=i + 1,
+            location_description=item.get("location", ""),
+            bbox_relative=[],
+            severity=_URGENCY_TO_SEVERITY.get(item.get("urgency", "LOW"), "low_stock"),
+            confidence=_URGENCY_TO_CONFIDENCE.get(item.get("urgency", "LOW"), 0.5),
+            visual_evidence=item.get("reason", ""),
+            estimated_missing_product=item.get("item"),
+            missing_product=None,
+            substitutes=[],
+        )
+        for i, item in enumerate(restocking)
+    ]
+
+    # Normalize fill score against AI's status declaration — but only when there are
+    # no detected gaps. If the AI says FULL but also listed restocking items, trust
+    # the restocking items (they are what the user sees in the UI).
+    if status == "FULL" and len(gaps) == 0:
+        fill = max(fill, 90)
+    elif status == "EMPTY":
+        fill = min(fill, 19)
+
+    # Build prioritized actions sorted by urgency
+    sorted_items = sorted(
+        restocking,
+        key=lambda x: {"HIGH": 0, "MEDIUM": 1, "LOW": 2}.get(x.get("urgency", "LOW"), 1),
+    )
+    actions = [
+        f"[{item.get('urgency', 'LOW')}] Restock {item.get('item', '?')} — {item.get('location', '')} ({item.get('reason', '')})"
+        for item in sorted_items
+    ]
+
+    # Try to infer category from visible products
+    all_products: list[str] = []
+    for sec in sections:
+        all_products.extend(sec.get("products_present", []))
+    category = all_products[0].lower() if all_products else "general"
+
+    return AnalyzeResponse(
+        shelf_id=shelf_id,
+        baseline_id=None,
+        shelf_health_score=fill,
+        shelf_health_label=score_to_label(fill),
+        shelf_health_color=score_to_color(fill),
+        category_detected=category,
+        gaps=gaps,
+        prioritized_actions=actions,
+        overall_summary=summary,
+        gaps_count=len(gaps),
+        analysis_method=method,
+        ai_confidence=confidence,
+    )
+
+
+async def _persist_smart_scan(
+    shelf_id: str,
+    result: AnalyzeResponse,
+    extra: dict,
+    db: AsyncSession,
+) -> None:
+    """Save an AnalyzeResponse from the smart/single-image path to the scans table."""
+    scan_id = uuid4()
+    created_at = datetime.now(timezone.utc)
+    result_payload = {
+        "category_detected": result.category_detected,
+        "gaps": [g.model_dump() for g in result.gaps],
+        "prioritized_actions": result.prioritized_actions,
+        "overall_summary": result.overall_summary,
+        "analysis_method": result.analysis_method,
+        "ai_confidence": result.ai_confidence,
+        **extra,
+    }
+    try:
+        await db.rollback()
+        await db.execute(
+            text("""
+                INSERT INTO scans (id, shelf_id, baseline_id, shelf_health_score, gaps_count, result_json, created_at)
+                VALUES (:id, :shelf_id, :baseline_id, :health_score, :gaps_count, CAST(:result_json AS jsonb), :created_at)
+            """),
+            {
+                "id": str(scan_id),
+                "shelf_id": shelf_id,
+                "baseline_id": None,
+                "health_score": result.shelf_health_score,
+                "gaps_count": result.gaps_count,
+                "result_json": json.dumps(result_payload),
+                "created_at": created_at,
+            },
+        )
+        await db.commit()
+        logger.info(
+            "Smart scan saved: method=%s confidence=%s shelf=%s score=%d gaps=%d",
+            result.analysis_method, result.ai_confidence, shelf_id,
+            result.shelf_health_score, result.gaps_count,
+        )
+    except Exception as exc:
+        logger.error("Failed to persist smart scan: %s", exc, exc_info=True)
+        await db.rollback()
+
+
+async def run_smart_analysis(
+    shelf_id: str,
+    image_bytes: bytes,
+    media_type: str,
+    db: AsyncSession,
+) -> AnalyzeResponse:
+    """
+    Confidence-gated dual-approach analysis.
+
+    Step 1 — Single-image (your friend's method):
+        Send ONE photo to GPT-4o with the auditing prompt.
+        Returns confidence: HIGH | MEDIUM | LOW.
+
+    Step 2 — Baseline comparison fallback (only if confidence == LOW):
+        Fetch the stored baseline for this shelf.
+        Send BOTH images for gap-by-gap comparison.
+        This path is richer: bounding boxes, substitute products, etc.
+
+    Step 3 — Graceful degradation:
+        If baseline doesn't exist and confidence is LOW, return the
+        single-image result anyway with a "single_image_fallback" label.
+    """
+    # ── Step 1: single-image analysis ────────────────────────────────────────
+    single_raw: dict | None = None
+    confidence = "LOW"
+
+    try:
+        single_raw = await ai_analyze_single_shelf(image_bytes, media_type)
+        confidence = single_raw.get("confidence", "LOW")
+        logger.info(
+            "Single-image analysis: confidence=%s fill=%s shelf=%s",
+            confidence, single_raw.get("overall_fill_percentage"), shelf_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Single-image analysis failed for shelf=%s, falling back to baseline: %s",
+            shelf_id, exc,
+        )
+
+    if confidence in ("HIGH", "MEDIUM") and single_raw is not None:
+        # ── High/medium confidence — return single-image result ───────────
+        result = _single_image_to_analyze_response(
+            single_raw, shelf_id, method="single_image", confidence=confidence
+        )
+        extra = {
+            "status": single_raw.get("status"),
+            "fill_percentage": single_raw.get("overall_fill_percentage"),
+            "sections": single_raw.get("sections", []),
+        }
+        await _persist_smart_scan(shelf_id, result, extra, db)
+        return result
+
+    # ── Step 2: LOW confidence — attempt baseline comparison ─────────────────
+    logger.info(
+        "Low confidence (%s), attempting baseline fallback for shelf=%s",
+        confidence, shelf_id,
+    )
+
+    baseline_result = await db.execute(
+        text("""
+            SELECT id, image_data FROM baselines
+            WHERE shelf_id = :shelf_id
+            ORDER BY captured_at DESC LIMIT 1
+        """),
+        {"shelf_id": shelf_id},
+    )
+    baseline_row = baseline_result.fetchone()
+
+    if baseline_row is not None:
+        try:
+            # Two-image comparison — richer result with bboxes & substitutes
+            analysis = await run_analysis(shelf_id, image_bytes, db)
+            analysis.analysis_method = "baseline_comparison"
+            analysis.ai_confidence = confidence  # show what triggered the fallback
+            return analysis
+        except Exception as exc:
+            logger.warning("Baseline comparison also failed: %s", exc)
+
+    # ── Step 3: Graceful degradation ─────────────────────────────────────────
+    if single_raw is not None:
+        logger.warning(
+            "No baseline and low confidence — returning single-image result for shelf=%s", shelf_id
+        )
+        result = _single_image_to_analyze_response(
+            single_raw, shelf_id, method="single_image_fallback", confidence=confidence
+        )
+        extra = {
+            "status": single_raw.get("status"),
+            "fill_percentage": single_raw.get("overall_fill_percentage"),
+            "sections": single_raw.get("sections", []),
+        }
+        await _persist_smart_scan(shelf_id, result, extra, db)
+        return result
+
+    raise ValueError(
+        "Analysis failed: single-image analysis could not complete. Please try again."
+    )

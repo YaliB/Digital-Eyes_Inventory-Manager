@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth.dependencies import CurrentUser, require_roles
 from backend.db.db_core import get_db
 from backend.schemas.analyze import AnalyzeResponse, SingleImageAnalyzeResponse
-from backend.services.analyze_service import run_analysis, run_single_image_analysis
+from backend.services.analyze_service import run_analysis, run_single_image_analysis, run_smart_analysis
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,9 +37,10 @@ async def analyze_shelf(
         )
 
     try:
-        result = await run_analysis(
+        result = await run_smart_analysis(
             shelf_id=shelf_id,
-            comparison_bytes=image_bytes,
+            image_bytes=image_bytes,
+            media_type=image.content_type or "image/jpeg",
             db=db,
         )
     except ValueError as e:

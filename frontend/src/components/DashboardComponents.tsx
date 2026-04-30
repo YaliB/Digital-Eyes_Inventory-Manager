@@ -88,7 +88,7 @@ export const AlertItem = ({ priority, productName, sku, aisle, shelf }: AlertIte
       case 'high':
         return { bg: 'bg-warning-50', icon: AlertTriangle, color: 'text-warning-600' };
       case 'medium':
-        return { bg: 'bg-warning-50', icon: AlertTriangle, color: 'text-warning-600' };
+        return { bg: 'bg-yellow-50', icon: AlertTriangle, color: 'text-yellow-500' };
       case 'low':
         return { bg: 'bg-primary-50', icon: Zap, color: 'text-primary-600' };
     }
@@ -117,6 +117,8 @@ export const AlertItem = ({ priority, productName, sku, aisle, shelf }: AlertIte
             ? 'bg-alert-600 text-white'
             : priority === 'high'
             ? 'bg-warning-600 text-white'
+            : priority === 'medium'
+            ? 'bg-yellow-400 text-white'
             : 'bg-neutral-300 text-neutral-700'
         }`}
       >

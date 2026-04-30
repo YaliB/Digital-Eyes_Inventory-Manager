@@ -24,7 +24,7 @@ class DetectedGap(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     shelf_id: str
-    baseline_id: str
+    baseline_id: str | None = None
     shelf_health_score: int
     shelf_health_label: str
     shelf_health_color: str
@@ -33,6 +33,9 @@ class AnalyzeResponse(BaseModel):
     prioritized_actions: list[str]
     overall_summary: str
     gaps_count: int
+    # Smart routing metadata
+    analysis_method: str = "baseline_comparison"   # "single_image" | "single_image_fallback" | "baseline_comparison"
+    ai_confidence: str | None = None               # "HIGH" | "MEDIUM" | "LOW" — populated for single-image paths
 
 
 class ShelfSection(BaseModel):
