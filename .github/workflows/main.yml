@@ -85,6 +85,7 @@ jobs:
         run: railway up --service backend --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
 
   deploy-frontend:
     name: Deploy Frontend → Vercel
