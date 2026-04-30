@@ -28,7 +28,8 @@ const SHELF_META: Record<string, { aisle: string; shelf: string }> = {
 function gapToPriority(severity: string, confidence: number): GapAlert['priority'] {
   if (severity === 'fully_out') return 'critical';
   if (confidence >= 0.75) return 'high';
-  return 'medium';
+  if (confidence >= 0.45) return 'medium';
+  return 'low';
 }
 
 function isToday(dateStr: string): boolean {

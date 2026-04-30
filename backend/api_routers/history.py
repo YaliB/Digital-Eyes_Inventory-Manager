@@ -1,12 +1,13 @@
 """
-GET /history — scan history for dashboard.
+GET  /history          — scan history for dashboard.
+DELETE /history/{id}  — delete a completed scan (mark shelf as restocked).
 Accessible by: manager (all shelves), supplier (read-only, all shelves).
 Workers cannot see history (they only scan).
 """
 
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,6 +75,7 @@ async def get_history(
                 shelf_health_score=row.shelf_health_score,
                 gaps_count=row.gaps_count,
                 created_at=row.created_at,
+                result_json=row.result_json,
             )
             for row in rows
         ],
@@ -83,3 +85,31 @@ async def get_history(
         requested_by=user.user_id,
         role=user.role,
     )
+
+
+@router.delete("/history/{scan_id}", status_code=200)
+async def delete_scan(
+    scan_id: str,
+    user: CurrentUser = Depends(require_roles("manager", "worker")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a scan record — used when a worker has restocked the shelf
+    and wants to mark the task as done.
+
+    Accessible by: manager, worker.
+    """
+    result = await db.execute(
+        text("SELECT id FROM scans WHERE id = :scan_id"),
+        {"scan_id": scan_id},
+    )
+    if result.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    await db.execute(
+        text("DELETE FROM scans WHERE id = :scan_id"),
+        {"scan_id": scan_id},
+    )
+    await db.commit()
+    logger.info("Scan deleted: id=%s by user=%s (role=%s)", scan_id, user.user_id, user.role)
+    return {"deleted": scan_id}

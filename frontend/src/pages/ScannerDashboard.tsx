@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, AlertCircle, Clock, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, RefreshCw, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/Button';
 import { ScanTask } from '@/types';
@@ -41,6 +41,7 @@ export const ScannerDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadTasks = async () => {
     setIsLoading(true);
@@ -52,6 +53,19 @@ export const ScannerDashboard = () => {
       setFetchError(err.message || 'Failed to load tasks');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const deleteTask = async (scanId: string) => {
+    setDeletingId(scanId);
+    try {
+      await api.deleteScan(scanId);
+      setScans(prev => prev.filter(s => s.id !== scanId));
+      if (expandedId === scanId) setExpandedId(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete task');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -254,16 +268,26 @@ export const ScannerDashboard = () => {
                                 </div>
                               )}
 
-                              {/* Rescan button */}
-                              {scoreToStatus(score) !== 'completed' && (
-                                <Button
-                                  variant="secondary"
-                                  fullWidth
-                                  onClick={() => navigate('/scanner')}
+                              {/* Action buttons */}
+                              <div className="flex gap-2 pt-1">
+                                {scoreToStatus(score) !== 'completed' && (
+                                  <Button
+                                    variant="secondary"
+                                    fullWidth
+                                    onClick={() => navigate('/scanner')}
+                                  >
+                                    Rescan This Shelf
+                                  </Button>
+                                )}
+                                <button
+                                  onClick={() => deleteTask(scan.id)}
+                                  disabled={deletingId === scan.id}
+                                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full"
                                 >
-                                  Rescan This Shelf
-                                </Button>
-                              )}
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  {deletingId === scan.id ? 'Deleting…' : 'Mark Restocked'}
+                                </button>
+                              </div>
                             </div>
                           </motion.div>
                         )}

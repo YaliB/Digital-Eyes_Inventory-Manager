@@ -313,7 +313,9 @@ async def run_single_image_analysis(
 # ── Confidence-gated scoring ──────────────────────────────────────────────────
 
 _URGENCY_TO_SEVERITY = {"HIGH": "fully_out", "MEDIUM": "low_stock", "LOW": "low_stock"}
-_CONFIDENCE_FLOAT = {"HIGH": 0.9, "MEDIUM": 0.65, "LOW": 0.35}
+# Per-item urgency drives the gap confidence so dashboard priority reflects actual urgency,
+# not the scan-level image quality confidence.
+_URGENCY_TO_CONFIDENCE = {"HIGH": 0.9, "MEDIUM": 0.6, "LOW": 0.3}
 
 
 def _single_image_to_analyze_response(
@@ -332,23 +334,16 @@ def _single_image_to_analyze_response(
     sections: list[dict] = single.get("sections", [])
     status: str = single.get("status", "PARTIAL")
 
-    # Normalize score against AI's own status declaration to prevent middle-value drift.
-    # e.g. AI says status=FULL but overall_fill_percentage=70 — that's a contradiction.
-    if status == "FULL":
-        fill = max(fill, 90)
-        restocking = []   # FULL means no restocking needed
-    elif status == "EMPTY":
-        fill = min(fill, 19)
-
-    # Convert restocking items → DetectedGap objects (no bounding boxes — single image)
-    conf_float = _CONFIDENCE_FLOAT.get(confidence, 0.5)
+    # Convert restocking items → DetectedGap objects FIRST (before any normalization).
+    # Each gap gets its OWN confidence derived from its urgency, not the scan-level
+    # image-quality confidence. This makes dashboard priority reflect actual stock urgency.
     gaps: list[DetectedGap] = [
         DetectedGap(
             gap_id=i + 1,
             location_description=item.get("location", ""),
             bbox_relative=[],
             severity=_URGENCY_TO_SEVERITY.get(item.get("urgency", "LOW"), "low_stock"),
-            confidence=conf_float,
+            confidence=_URGENCY_TO_CONFIDENCE.get(item.get("urgency", "LOW"), 0.5),
             visual_evidence=item.get("reason", ""),
             estimated_missing_product=item.get("item"),
             missing_product=None,
@@ -356,6 +351,14 @@ def _single_image_to_analyze_response(
         )
         for i, item in enumerate(restocking)
     ]
+
+    # Normalize fill score against AI's status declaration — but only when there are
+    # no detected gaps. If the AI says FULL but also listed restocking items, trust
+    # the restocking items (they are what the user sees in the UI).
+    if status == "FULL" and len(gaps) == 0:
+        fill = max(fill, 90)
+    elif status == "EMPTY":
+        fill = min(fill, 19)
 
     # Build prioritized actions sorted by urgency
     sorted_items = sorted(

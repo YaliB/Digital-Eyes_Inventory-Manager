@@ -78,6 +78,17 @@ export async function checkBaselineExists(shelfId: string): Promise<BaselineStat
   return res.json();
 }
 
+export async function deleteScan(scanId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/history/${encodeURIComponent(scanId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to delete scan');
+  }
+}
+
 export async function getHistory(params?: {
   shelf_id?: string;
   limit?: number;
